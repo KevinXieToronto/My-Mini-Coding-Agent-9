@@ -30,5 +30,6 @@ export async function runCli(opts: CliOptions): Promise<void> {
     return
   }
 
-  console.log(`${PRODUCT_NAME} v${VERSION} — nothing wired up yet. Try: mini-cc --debug`)
+  const { runReadlineREPL } = await import('./screens/ReadlineREPL.js')
+  await runReadlineREPL(settings)
 }
