@@ -10,6 +10,9 @@ const ctx: ToolContext = {
   cwd: process.cwd(),
   abortController: new AbortController(),
   readFileState: new Map(),
+  // Smoke scripts have no interactive prompt; pre-approve everything.
+  // 冒烟脚本没有交互式确认，直接全部预先放行。
+  sessionAllow: new Set(getAllTools().map(t => t.name)),
 }
 const tools = new Map(getAllTools().map(t => [t.name, t]))
 

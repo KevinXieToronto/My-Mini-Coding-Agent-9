@@ -21,12 +21,13 @@ npm run dev -- [flags]     # run the CLI (tsx, no build step)
 npm run typecheck          # tsc --noEmit — the only check that exists
 node tools-dev/stub-server.mjs   # local OpenAI-compatible stub, port 8787
 npx tsx tools-dev/smoke.ts       # exercise the tools with no model in the loop
+npx tsx tools-dev/smoke-ui.tsx   # render the Ink components off-screen, no model needed
 ```
 
 There is no build, lint, or test setup. `tsc --noEmit` is the gate.
 
 Useful CLI flags: `--debug` (print resolved config and exit), `-m/--model`, `-c/--cwd`,
-`-p/--print` (declared but not yet implemented).
+`-p/--print` (non-interactive: one prompt in, plain text out).
 
 Developing without API credits — start the stub server, then:
 `set OPENAI_BASE_URL=http://127.0.0.1:8787/v1`. It echoes the last user message; a message
@@ -37,7 +38,8 @@ exercises the streaming tool-call accumulator.
 
 Boot path, each stage behind a *dynamic* import so cheap commands stay cheap:
 `bootstrap-entry.ts` → `entrypoints/cli.tsx` (commander dispatch, `--version` with near-zero
-imports) → `main.ts` (config resolution + mode selection) → `screens/ReadlineREPL.ts`.
+imports) → `main.ts` (config resolution + mode selection) → `screens/REPL.tsx` (Ink) or
+`cli/print.ts` (no TTY, or `-p`).
 
 **`src/query.ts` is the whole program.** It is an async generator: it *yields* `QueryEvent`s so the
 UI renders incrementally and *returns* a `Terminal` telling the caller precisely why the turn ended.

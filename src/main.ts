@@ -34,6 +34,22 @@ export async function runCli(opts: CliOptions): Promise<void> {
     return
   }
 
-  const { runReadlineREPL } = await import('./screens/ReadlineREPL.js')
-  await runReadlineREPL(settings)
+  // Ink needs a real terminal to put stdin into raw mode. If we do not have
+  // one — a pipe, a CI job, `-p` — fall back to the non-interactive path
+  // rather than crashing with "Raw mode is not supported".
+  // Ink 需要真实终端才能把 stdin 切到 raw 模式。没有终端（管道、CI、`-p`）时
+  // 走非交互路径，而不是抛「Raw mode is not supported」。
+  if (opts.print !== undefined || !process.stdin.isTTY) {
+    const { runPrintMode } = await import('./cli/print.js')
+    await runPrintMode(settings, opts.print)
+    return
+  }
+
+  const [{ render }, { createElement }, { REPL }] = await Promise.all([
+    import('ink'),
+    import('react'),
+    import('./screens/REPL.js'),
+  ])
+  const instance = render(createElement(REPL, { settings }))
+  await instance.waitUntilExit()
 }
