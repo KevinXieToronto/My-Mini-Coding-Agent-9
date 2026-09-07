@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": { "mini-cc": "./src/bootstrap-entry.ts" },
+  "bin": {
+    "mini-cc": "./src/bootstrap-entry.ts"
+  },
   "scripts": {
     "dev": "tsx src/bootstrap-entry.ts",
     "typecheck": "tsc --noEmit"
@@ -12,7 +14,8 @@
     "@commander-js/extra-typings": "^13.1.0",
     "commander": "^13.1.0",
     "openai": "^4.104.0",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

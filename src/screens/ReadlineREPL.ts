@@ -74,7 +74,7 @@ async function drainTurn(
     messages,
     settings,
     tools,
-    toolContext: { cwd: process.cwd(), abortController },
+    toolContext: { cwd: process.cwd(), abortController, readFileState: new Map() },
   })
 
   let printedAssistantPrefix = false

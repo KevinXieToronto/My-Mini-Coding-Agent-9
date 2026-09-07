@@ -1,3 +1,4 @@
+import type { z } from 'zod'
 import type { Settings } from './utils/config.js'
 import type { Message, ToolCall } from './types/message.js'
 import { toApiMessages } from './types/message.js'
@@ -158,11 +159,20 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
 }
 
 /**
- * Run a single tool call. A failing tool is NOT an exception at the loop level:
- * the error text goes back to the model as a tool result so it can correct
- * itself. A crashed loop helps nobody.
- * 执行单次工具调用。工具失败在循环层面不算异常：错误文本作为工具结果回传给模型，
- * 让它自行纠正。循环崩溃对谁都没好处。
+ * Run a single tool call through the pipeline:
+ * 让单次工具调用走完整条流水线：
+ *
+ *   lookup -> JSON parse -> schema parse -> validateInput -> execute
+ *   查表 -> 解析 JSON -> 解析 schema -> validateInput -> execute
+ *
+ * Every failure returns a MESSAGE, never an exception. The model reads the
+ * error, corrects itself, and tries again. Validation runs before permissions
+ * (Ch.6) so a malformed call fails fast without spending a human interruption.
+ * 任何失败都返回「消息」而非抛异常：模型读到错误、自行纠正、重试。
+ * 校验先于权限检查（第 6 章），让非法调用尽早失败，不必打扰人类。
+ *
+ * cf. checkPermissionsAndCallTool in src/services/tools/toolExecution.ts.
+ * 参见 src/services/tools/toolExecution.ts 的 checkPermissionsAndCallTool。
  */
 async function runOneTool(
   call: ToolCall,
@@ -177,9 +187,9 @@ async function runOneTool(
     }
   }
 
-  let input: unknown
+  let raw: unknown
   try {
-    input = JSON.parse(call.arguments || '{}')
+    raw = JSON.parse(call.arguments || '{}')
   } catch {
     return {
       result: `Error: arguments for ${call.name} were not valid JSON:\n${call.arguments}`,
@@ -187,12 +197,36 @@ async function runOneTool(
     }
   }
 
+  // The schema is the first wall. strictObject rejects unknown keys, which
+  // catches a surprising number of model mistakes.
+  // schema 是第一道墙。strictObject 拒绝未知字段，能拦下相当多的模型失误。
+  const parsed = tool.inputSchema.safeParse(raw)
+  if (!parsed.success) {
+    return {
+      result: `InputValidationError: ${call.name} arguments are invalid.\n${formatZodError(parsed.error)}`,
+      isError: true,
+    }
+  }
+  const input = parsed.data
+
+  const validation = tool.validateInput?.(input, ctx)
+  if (validation && !validation.ok) {
+    return { result: `Error: ${validation.message}`, isError: true }
+  }
+
   try {
-    return { result: await tool.execute(input, ctx), isError: false }
+    const output = await tool.execute(input, ctx)
+    return { result: output.result, isError: false }
   } catch (error) {
     return {
       result: `Error: ${error instanceof Error ? error.message : String(error)}`,
       isError: true,
     }
   }
+}
+
+function formatZodError(error: z.ZodError): string {
+  return error.issues
+    .map(issue => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('\n')
 }

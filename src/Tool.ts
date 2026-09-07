@@ -1,55 +1,160 @@
 import type OpenAI from 'openai'
+import type { z } from 'zod'
+import { zodToJsonSchema } from 'zod-to-json-schema'
 
 /**
- * The capability contract. Every capability mini-cc has — reading files,
- * running commands, spawning sub-agents, calling an MCP server — implements
- * this one interface. Nothing gets a side channel.
- * 能力契约：读文件、执行命令、派生子代理、调用 MCP 服务器等所有能力都实现这一个接口，
- * 谁也不能走旁路。
+ * The capability contract.
+ * 能力契约。
  *
- * That single rule is what makes one permission gate sufficient (Ch.6, Ch.9).
+ * Every capability mini-cc has — reading files, running commands, spawning
+ * sub-agents, calling an MCP server — implements this one interface. Nothing
+ * gets a side channel. That single rule is what makes one permission gate
+ * sufficient (Ch.6, Ch.9).
+ * 读文件、执行命令、派生子代理、调用 MCP 服务器等所有能力都实现这一个接口，谁也不能走旁路。
  * 正因这条规则，一道权限闸门就够用（第 6、9 章）。
  *
- * cf. src/Tool.ts in the Claude Code tree: same idea, about 40 members.
- * We start with five and grow it as chapters need more.
- * 参见 Claude Code 的 src/Tool.ts：同样思路，约 40 个成员。此处先给 5 个，按章节需要扩充。
+ * cf. src/Tool.ts in the Claude Code tree: the same idea with ~40 members.
+ * 参见 Claude Code 的 src/Tool.ts：同样思路，约 40 个成员。
  */
-export type Tool = {
+export type Tool<Schema extends z.ZodType = z.ZodType> = {
+  // --- identity ----------------------------------------------------------
+  // --- 身份 ---
   name: string
   /**
-   * Shown to the model. This is prompt engineering, not documentation.
-   * 展示给模型看。这是提示工程，不是文档。
+   * Model-facing. This is prompt engineering, not documentation: it is the
+   * only thing the model knows about this capability. Claude Code keeps most
+   * of this text in a separate prompt.ts per tool so it can evolve
+   * independently of the implementation.
+   * 面向模型。这是提示工程而非文档：模型对该能力的全部认知都来自这段文字。
+   * Claude Code 把它单独放在每个工具的 prompt.ts 中，以便与实现分头演进。
    */
   description: string
   /**
-   * JSON Schema for the arguments. Ch.4 generates this from zod.
-   * 参数的 JSON Schema。第 4 章改由 zod 生成。
+   * Human-facing name for the transcript. Defaults to `name`.
+   * 面向人类、用于会话记录的名称。默认取 `name`。
    */
-  parameters: Record<string, unknown>
+  userFacingName?: (input: z.infer<Schema>) => string
+
+  // --- schema ------------------------------------------------------------
+  // --- 模式 ---
   /**
-   * Execute the call. Input is already-parsed JSON from the model.
-   * 执行调用。入参是已解析好的模型 JSON。
+   * zod is the source of truth; the JSON Schema the model sees is derived.
+   * zod 是唯一事实来源；模型看到的 JSON Schema 由它派生。
    */
-  execute(input: unknown, ctx: ToolContext): Promise<string>
+  inputSchema: Schema
+
+  // --- semantics ---------------------------------------------------------
+  // --- 语义 ---
+  /**
+   * Read-only calls skip the permission prompt and may run in parallel.
+   * Note it takes the INPUT: `Bash` is read-only for `git status` and not for
+   * `git push`. Concurrency is a property of the call, not of the tool.
+   * 只读调用可跳过权限询问并可并行执行。注意入参是「本次调用」：
+   * Bash 对 `git status` 只读、对 `git push` 不是。并发性属于调用，而非工具。
+   */
+  isReadOnly?: (input: z.infer<Schema>) => boolean
+  isConcurrencySafe?: (input: z.infer<Schema>) => boolean
+
+  // --- safety ------------------------------------------------------------
+  // --- 安全 ---
+  /**
+   * Semantic pre-check. Runs BEFORE permissions, so a malformed call fails
+   * fast without spending a human interruption.
+   * 语义预检。在权限检查之前运行，让非法调用尽早失败，不必打扰人类。
+   */
+  validateInput?: (input: z.infer<Schema>, ctx: ToolContext) => ValidationResult
+  /**
+   * Tool-specific permission logic. General rules live in utils/permissions.
+   * 工具专属的权限逻辑。通用规则放在 utils/permissions。
+   */
+  checkPermissions?: (input: z.infer<Schema>, ctx: ToolContext) => PermissionResult
+
+  // --- execution ---------------------------------------------------------
+  // --- 执行 ---
+  execute: (input: z.infer<Schema>, ctx: ToolContext) => Promise<ToolResult>
+
+  // --- rendering ---------------------------------------------------------
+  // --- 渲染 ---
+  /**
+   * One line for the transcript, e.g. `Read(src/index.ts)`.
+   * 会话记录中的一行，如 `Read(src/index.ts)`。
+   */
+  renderCall?: (input: z.infer<Schema>) => string
+  /**
+   * What the HUMAN sees of the result. The model always sees `result`.
+   * 人类看到的结果呈现。模型看到的始终是 `result`。
+   */
+  renderResult?: (result: ToolResult, input: z.infer<Schema>) => string
 }
 
+export type ToolResult = {
+  /**
+   * Text handed back to the model as the tool result.
+   * 作为工具结果回传给模型的文本。
+   */
+  result: string
+  /**
+   * Structured payload for renderers. Never sent to the model.
+   * 供渲染器使用的结构化数据。绝不发送给模型。
+   */
+  data?: unknown
+}
+
+export type ValidationResult = { ok: true } | { ok: false; message: string }
+
 /**
- * The ambient environment handed to every tool: everything a tool needs but
- * should not construct for itself.
- * 交给每个工具的环境上下文：工具所需、但不该自行构造的东西。
+ * The gate's answer. Three outcomes, checked before every tool call.
+ * 闸门的答复。三种结果，每次工具调用前检查。
  *
- * Passing it explicitly instead of reaching for globals is what makes
+ * cf. PermissionResult in src/types/permissions.ts (which adds 'passthrough').
+ * 参见 src/types/permissions.ts 中的 PermissionResult（那里还多一种 'passthrough'）。
+ */
+export type PermissionResult =
+  | { behavior: 'allow' }
+  | { behavior: 'ask'; message: string }
+  | { behavior: 'deny'; message: string }
+
+/**
+ * The ambient environment handed to every tool.
+ * 交给每个工具的环境上下文。
+ *
+ * Passing it explicitly rather than reaching for globals is what makes
  * sub-agents possible in Ch.14 — a sub-agent is the same loop with a different
  * context object.
  * 显式传递而非依赖全局变量，才使第 14 章的子代理成为可能——
  * 子代理就是换了个 context 对象的同一个循环。
- *
- * cf. ToolUseContext in src/Tool.ts.
- * 参见 src/Tool.ts 中的 ToolUseContext。
  */
 export type ToolContext = {
   cwd: string
   abortController: AbortController
+  /**
+   * Read-before-write cache: path -> when we last read it, and the mtime then.
+   * FileEditTool refuses to edit a file it has not seen, or one that changed
+   * underneath us. cf. readFileState on ToolUseContext.
+   * 「先读后写」缓存：路径 -> 上次读取的时刻及当时的 mtime。
+   * FileEditTool 拒绝编辑未曾读过、或已在背后被改动的文件。参见 ToolUseContext 的 readFileState。
+   */
+  readFileState: Map<string, { timestamp: number; mtimeMs: number }>
+}
+
+/**
+ * Fill in fail-closed defaults. A tool that forgets to declare itself
+ * read-only is treated as dangerous, never the other way round.
+ * 填入「失败即关闭」的默认值。忘记声明只读的工具一律按危险处理，绝不反过来。
+ *
+ * cf. buildTool() in src/Tool.ts.
+ * 参见 src/Tool.ts 的 buildTool()。
+ */
+export function buildTool<Schema extends z.ZodType>(
+  definition: Tool<Schema>,
+): Required<Pick<Tool<Schema>, 'isReadOnly' | 'isConcurrencySafe' | 'checkPermissions'>> &
+  Tool<Schema> {
+  return {
+    isReadOnly: () => false,
+    isConcurrencySafe: () => false,
+    checkPermissions: () => ({ behavior: 'allow' as const }),
+    ...definition,
+  }
 }
 
 /**
@@ -62,7 +167,20 @@ export function toApiTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletio
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: tool.parameters,
+      parameters: zodToJsonSchema(tool.inputSchema, {
+        $refStrategy: 'none',
+        target: 'openAi',
+      }) as Record<string, unknown>,
     },
   }))
+}
+
+/**
+ * Default transcript line when a tool does not supply `renderCall`.
+ * 工具未提供 `renderCall` 时的默认会话记录行。
+ */
+export function defaultRenderCall(tool: Tool, input: unknown): string {
+  if (tool.renderCall) return tool.renderCall(input)
+  const json = JSON.stringify(input)
+  return `${tool.name}(${json.length > 80 ? `${json.slice(0, 77)}...` : json})`
 }

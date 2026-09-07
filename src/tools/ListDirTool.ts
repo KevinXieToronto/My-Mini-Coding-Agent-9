@@ -1,43 +1,40 @@
 import { readdirSync, statSync } from 'node:fs'
-import { isAbsolute, join, resolve } from 'node:path'
-import type { Tool } from '../Tool.js'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import { z } from 'zod'
+import { buildTool } from '../Tool.js'
+
+const schema = z.strictObject({
+  path: z
+    .string()
+    .describe('Directory to list. Relative paths resolve against the working directory.'),
+})
 
 /**
- * A throwaway tool, here only so Chapter 3's loop has something to call.
- * Chapter 4 rebuilds it properly against the full Tool contract.
- * 一次性工具，仅为让第 3 章的循环有东西可调用。第 4 章会按完整 Tool 契约重写。
+ * Migrated from Chapter 3 to the full contract, as a worked example.
+ * Note how much of the tool is now declaration rather than code.
+ * 作为示范，从第 3 章迁移到完整契约。注意如今工具中有多少内容变成了声明而非代码。
  */
-export const ListDirTool: Tool = {
+export const ListDirTool = buildTool({
   name: 'ListDir',
   description:
     'List the files and directories directly inside a path. Use this to orient ' +
     'yourself in an unfamiliar project before reading files.',
-  parameters: {
-    type: 'object',
-    properties: {
-      path: {
-        type: 'string',
-        description: 'Directory to list. Relative paths resolve against the working directory.',
-      },
-    },
-    required: ['path'],
-    additionalProperties: false,
-  },
+  inputSchema: schema,
+
+  isReadOnly: () => true,
+  isConcurrencySafe: () => true,
+
+  renderCall: input => `ListDir(${input.path})`,
 
   async execute(input, ctx) {
-    const { path } = input as { path?: string }
-    if (typeof path !== 'string') throw new Error('`path` must be a string')
-
-    const target = isAbsolute(path) ? path : resolve(ctx.cwd, path)
+    const target = isAbsolute(input.path) ? input.path : resolve(ctx.cwd, input.path)
     const entries = readdirSync(target)
       .slice(0, 200)
-      .map(name => {
-        const isDir = statSync(join(target, name)).isDirectory()
-        return isDir ? `${name}/` : name
-      })
+      .map(name => (statSync(join(target, name)).isDirectory() ? `${name}/` : name))
       .sort()
 
-    if (entries.length === 0) return `${target} is empty`
-    return `${target}\n${entries.join('\n')}`
+    const header = relative(ctx.cwd, target) || '.'
+    if (entries.length === 0) return { result: `${header} is empty` }
+    return { result: `${header}\n${entries.join('\n')}`, data: { count: entries.length } }
   },
-}
+})

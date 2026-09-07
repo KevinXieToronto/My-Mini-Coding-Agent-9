@@ -1,5 +1,8 @@
 import type { Tool } from './Tool.js'
 import { ListDirTool } from './tools/ListDirTool.js'
+import { FileReadTool } from './tools/FileReadTool.js'
+import { FileWriteTool } from './tools/FileWriteTool.js'
+import { FileEditTool } from './tools/FileEditTool.js'
 
 /**
  * The tool registry.
@@ -13,7 +16,12 @@ import { ListDirTool } from './tools/ListDirTool.js'
  * 参见 Claude Code 的 src/tools.ts：getAllBaseTools() 供给 getTools(permissionContext)，
  * 在模型看到之前剔除被全面拒绝和已禁用的工具；随后 assembleToolPool() 将 MCP 工具
  * 作为单独排序的分区合入，使内置工具保持稳定前缀，不致失效服务端提示缓存。
+ *
+ * The cast is the price of holding tools with different zod schemas in one
+ * array. Each tool stays fully typed internally; only the registry is generic.
+ * 这个类型断言是把不同 zod schema 的工具装进同一数组的代价。
+ * 每个工具内部仍完全有类型，泛化的只是注册表。
  */
 export function getAllTools(): Tool[] {
-  return [ListDirTool]
+  return [FileReadTool, FileWriteTool, FileEditTool, ListDirTool] as unknown as Tool[]
 }
