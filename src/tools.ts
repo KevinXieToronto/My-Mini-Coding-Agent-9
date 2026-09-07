@@ -3,6 +3,8 @@ import { ListDirTool } from './tools/ListDirTool.js'
 import { FileReadTool } from './tools/FileReadTool.js'
 import { FileWriteTool } from './tools/FileWriteTool.js'
 import { FileEditTool } from './tools/FileEditTool.js'
+import { GlobTool } from './tools/GlobTool.js'
+import { GrepTool } from './tools/GrepTool.js'
 
 /**
  * The tool registry.
@@ -23,5 +25,12 @@ import { FileEditTool } from './tools/FileEditTool.js'
  * 每个工具内部仍完全有类型，泛化的只是注册表。
  */
 export function getAllTools(): Tool[] {
-  return [FileReadTool, FileWriteTool, FileEditTool, ListDirTool] as unknown as Tool[]
+  return [
+    FileReadTool,
+    FileWriteTool,
+    FileEditTool,
+    GlobTool,
+    GrepTool,
+    ListDirTool,
+  ] as unknown as Tool[]
 }
