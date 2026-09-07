@@ -1,3 +1,4 @@
+// 本文件：Glob 工具——按文件名 glob 模式查找文件，结果按修改时间倒序返回。
 import picomatch from 'picomatch'
 import { z } from 'zod'
 import { buildTool } from '../Tool.js'
@@ -45,6 +46,7 @@ export const GlobTool = buildTool({
     return data ? `${data.count} file(s)` : 'searched'
   },
 
+  // 本函数：遍历目录树并按 glob 过滤，按 mtime 倒序排序、限量返回并提示截断。
   async execute(input, ctx) {
     const root = input.path ? toAbsolute(ctx.cwd, input.path) : ctx.cwd
     const isMatch = picomatch(input.pattern, { dot: true })

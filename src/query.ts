@@ -1,3 +1,4 @@
+// 本文件：代理主循环所在处，驱动「调用模型 → 执行工具 → 回灌结果」的回合迭代。
 import type { z } from 'zod'
 import type { Settings } from './utils/config.js'
 import type { Message, ToolCall } from './types/message.js'
@@ -60,6 +61,7 @@ export type QueryParams = {
   maxTurns?: number
 }
 
+// 本函数：代理主循环——反复请求模型并执行其工具调用，直到没有工具调用或触发终止条件。
 export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Terminal> {
   const { messages, settings, tools, toolContext } = params
   const maxTurns = params.maxTurns ?? settings.maxTurns
@@ -174,6 +176,7 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
  * cf. checkPermissionsAndCallTool in src/services/tools/toolExecution.ts.
  * 参见 src/services/tools/toolExecution.ts 的 checkPermissionsAndCallTool。
  */
+// 本函数：让单次工具调用走完「查表 → 解析 JSON → 校验 schema → validateInput → execute」，任何失败都以错误文本返回而非抛异常。
 async function runOneTool(
   call: ToolCall,
   byName: Map<string, Tool>,
@@ -225,6 +228,7 @@ async function runOneTool(
   }
 }
 
+// 本函数：把 zod 校验错误格式化成模型易读的多行提示。
 function formatZodError(error: z.ZodError): string {
   return error.issues
     .map(issue => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)

@@ -1,3 +1,4 @@
+// 本文件：Grep 工具——用正则搜索文件内容，优先调用 ripgrep，不可用时退回纯 JS 扫描。
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import picomatch from 'picomatch'
@@ -57,6 +58,7 @@ export const GrepTool = buildTool({
     return data ? `${data.matches} match(es) in ${data.files} file(s)` : 'searched'
   },
 
+  // 本函数：先尝试 ripgrep 搜索，其不可用时退回纯 JS 扫描。
   async execute(input, ctx) {
     const root = input.path ? toAbsolute(ctx.cwd, input.path) : ctx.cwd
     const viaRipgrep = tryRipgrep(input, root)
@@ -68,6 +70,7 @@ export const GrepTool = buildTool({
  * Returns undefined if ripgrep is unavailable, so the caller can fall back.
  * ripgrep 不可用时返回 undefined，让调用方走兜底路径。
  */
+// 本函数：按输出模式拼装参数调用外部 rg 进程；rg 缺失或异常时返回 undefined 以便走兜底。
 function tryRipgrep(input: GrepInput, root: string): { result: string; data: unknown } | undefined {
   const mode = input.output_mode ?? 'files_with_matches'
   const args: string[] = ['--color=never']
@@ -101,6 +104,7 @@ function tryRipgrep(input: GrepInput, root: string): { result: string; data: unk
   }
 }
 
+// 本函数：纯 JS 兜底扫描——遵守 .gitignore、跳过大文件与二进制，按输出模式组织并限量结果。
 function scanInJs(input: GrepInput, root: string): { result: string; data: unknown } {
   const mode = input.output_mode ?? 'files_with_matches'
   let regex: RegExp
@@ -171,6 +175,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
   }
 }
 
+// 本函数：整理 ripgrep 的输出行——裁掉根路径前缀、限量并附截断提示。
 function formatLines(
   lines: string[],
   root: string,

@@ -1,3 +1,4 @@
+// 本文件：会话消息与工具调用的类型定义，以及转换为 API 传输格式的边界函数。
 import type OpenAI from 'openai'
 
 /**
@@ -39,6 +40,7 @@ export type ToolCall = {
  * Drop UI-only messages and convert to the wire format.
  * 丢弃仅供 UI 的消息，并转换为传输格式。
  */
+// 本函数：丢弃仅供 UI 的消息，把内部 Message 转换成 OpenAI 的传输格式。
 export function toApiMessages(messages: Message[]): ApiMessage[] {
   const out: ApiMessage[] = []
   for (const message of messages) {

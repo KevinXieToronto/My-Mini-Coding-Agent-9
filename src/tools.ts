@@ -1,3 +1,4 @@
+// 本文件：工具注册表，集中列出模型可见的全部内置工具。
 import type { Tool } from './Tool.js'
 import { ListDirTool } from './tools/ListDirTool.js'
 import { FileReadTool } from './tools/FileReadTool.js'
@@ -24,6 +25,7 @@ import { GrepTool } from './tools/GrepTool.js'
  * 这个类型断言是把不同 zod schema 的工具装进同一数组的代价。
  * 每个工具内部仍完全有类型，泛化的只是注册表。
  */
+// 本函数：返回当前可用的全部工具实例，供代理循环与 REPL 使用。
 export function getAllTools(): Tool[] {
   return [
     FileReadTool,

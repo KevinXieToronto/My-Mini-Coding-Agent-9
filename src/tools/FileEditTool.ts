@@ -1,3 +1,4 @@
+// 本文件：Edit 工具——对文件做精确字符串替换，并施加「先读后写」与「防陈旧」两道护栏。
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { z } from 'zod'
 import { buildTool } from '../Tool.js'
@@ -50,6 +51,7 @@ export const FileEditTool = buildTool({
     return data ? `${data.replacements} replacement(s)` : 'edited'
   },
 
+  // 本函数：编辑前校验——新旧串不同、文件已读过、mtime 未变、old_string 存在且唯一（除非 replace_all）。
   validateInput(input, ctx) {
     if (input.old_string === input.new_string) {
       return { ok: false, message: 'old_string and new_string are identical; nothing to do.' }
@@ -97,6 +99,7 @@ export const FileEditTool = buildTool({
     return { ok: true }
   },
 
+  // 本函数：以不含 await 的「读—改—写」完成替换，并回传改动附近的片段供确认。
   async execute(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
 
@@ -124,6 +127,7 @@ export const FileEditTool = buildTool({
   },
 })
 
+// 本函数：统计子串在文本中出现的次数。
 function countOccurrences(haystack: string, needle: string): number {
   if (needle === '') return 0
   return haystack.split(needle).length - 1
@@ -133,6 +137,7 @@ function countOccurrences(haystack: string, needle: string): number {
  * Give the model a few lines of context so it can confirm the edit landed.
  * 回传几行上下文，让模型确认编辑已生效。
  */
+// 本函数：截取替换文本周围数行并加行号，让模型确认编辑已生效。
 function snippetAround(content: string, marker: string): string {
   const index = content.indexOf(marker)
   if (index === -1) return ''

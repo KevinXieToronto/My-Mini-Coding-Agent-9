@@ -1,3 +1,4 @@
+// 本文件：CLI 组装层，解析配置与环境变量并选择运行模式（诊断输出或交互式 REPL）。
 import { loadEnvFile, loadSettings } from './utils/config.js'
 import { PRODUCT_NAME, VERSION } from './constants/product.js'
 
@@ -14,6 +15,7 @@ export type CliOptions = {
  * cf. src/main.tsx in the Claude Code tree (~800 KB there; a few lines here).
  * 参见 Claude Code 的 src/main.tsx（那边约 800 KB，这里只有几行）。
  */
+// 本函数：切换工作目录、加载 .env 与分层设置；--debug 时打印诊断信息，否则启动 REPL。
 export async function runCli(opts: CliOptions): Promise<void> {
   process.chdir(opts.cwd)
   loadEnvFile(opts.cwd)

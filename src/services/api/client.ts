@@ -1,3 +1,4 @@
+// 本文件：唯一知晓模型供应商的模块，负责创建并缓存 OpenAI 客户端（可指向 Azure/Ollama/vLLM）。
 import OpenAI from 'openai'
 import type { Settings } from '../../utils/config.js'
 
@@ -15,6 +16,7 @@ import type { Settings } from '../../utils/config.js'
  */
 let client: OpenAI | undefined
 
+// 本函数：惰性创建并缓存客户端，校验 API Key 并支持自定义 baseURL。
 export function getClient(settings: Settings): OpenAI {
   if (client) return client
 
@@ -40,6 +42,7 @@ export function getClient(settings: Settings): OpenAI {
  * Reset between tests, or after the user changes the model at runtime.
  * 用于测试之间、或用户运行时改动模型后的重置。
  */
+// 本函数：清空客户端缓存，供测试之间或运行时改动模型后重建。
 export function resetClient(): void {
   client = undefined
 }

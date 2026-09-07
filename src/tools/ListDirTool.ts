@@ -1,3 +1,4 @@
+// 本文件：ListDir 工具——列出某个路径下的直接子项，用于在陌生项目中快速定位。
 import { readdirSync, statSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { z } from 'zod'
@@ -26,6 +27,7 @@ export const ListDirTool = buildTool({
 
   renderCall: input => `ListDir(${input.path})`,
 
+  // 本函数：列出目标目录的直接子项（目录名加斜杠）并排序返回。
   async execute(input, ctx) {
     const target = isAbsolute(input.path) ? input.path : resolve(ctx.cwd, input.path)
     const entries = readdirSync(target)

@@ -1,3 +1,4 @@
+// 本文件：CLI 命令行调度器，声明参数并把昂贵的运行模式藏在动态 import 之后。
 import { Command } from '@commander-js/extra-typings'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
 
@@ -13,6 +14,7 @@ import { PRODUCT_NAME, VERSION } from '../constants/product.js'
  * `--version` 只需该文件本身。此处保持同样结构：昂贵的 REPL 藏在动态 import 之后，
  * 让廉价命令保持廉价。
  */
+// 本函数：构建命令行程序、解析参数，再动态载入主流程执行。
 async function main(): Promise<void> {
   const program = new Command()
     .name(PRODUCT_NAME)

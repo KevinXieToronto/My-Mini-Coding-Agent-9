@@ -1,3 +1,4 @@
+// 本文件：产品级常量（名称、版本、配置目录名、项目指令文件名），保持零依赖供各处引用。
 /**
  * Product-level constants. Kept dependency-free so the `--version` fast path
  * in entrypoints/cli.tsx can import it without pulling in the world.

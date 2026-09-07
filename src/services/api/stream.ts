@@ -1,3 +1,4 @@
+// 本文件：流式请求层，把 OpenAI 的分片响应累积成文本增量与完整的工具调用。
 import type OpenAI from 'openai'
 import type { Settings } from '../../utils/config.js'
 import type { ApiMessage, ToolCall } from '../../types/message.js'
@@ -34,6 +35,7 @@ export type StreamParams = {
  * OpenAI 流式格式最麻烦的是工具调用：它们按数组下标分片到达，名字在首个分片，
  * JSON 参数则零散分布在后续众多分片中。我们累积成密集数组，最后一次性产出完整 ToolCall。
  */
+// 本函数：流式请求一次助手回合，过程中产出文本增量，结束时给出完整文本、工具调用与用量。
 export async function* streamAssistantTurn(
   params: StreamParams,
 ): AsyncGenerator<StreamEvent, void> {

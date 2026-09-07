@@ -1,3 +1,4 @@
+// 本文件：文件类工具的冒烟脚本，不经过模型直接验证各条护栏与正常路径。
 /**
  * Exercise the tools directly, with no model in the loop.
  * 不经过模型，直接演练各个工具。
@@ -19,6 +20,7 @@ const ctx: ToolContext = {
 
 const tools = new Map(getAllTools().map(t => [t.name, t]))
 
+// 本函数：模拟代理的工具分发（schema 校验 → validateInput → execute）并打印结果摘要。
 async function call(name: string, input: unknown): Promise<void> {
   const tool = tools.get(name)!
   const parsed = tool.inputSchema.safeParse(input)

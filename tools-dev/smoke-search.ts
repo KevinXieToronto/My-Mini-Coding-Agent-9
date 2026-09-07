@@ -1,3 +1,4 @@
+// 本文件：Glob 与 Grep 的冒烟脚本，对本项目自身的目录树实际跑一遍。
 /**
  * Exercise Glob and Grep against this project's own tree.
  * 用本项目自身的目录树跑一遍 Glob 与 Grep。
@@ -12,6 +13,7 @@ const ctx: ToolContext = {
 }
 const tools = new Map(getAllTools().map(t => [t.name, t]))
 
+// 本函数：执行一次搜索工具调用，打印渲染摘要与结果的前几行。
 async function call(name: string, input: unknown, head = 6): Promise<void> {
   const tool = tools.get(name)!
   const parsed = tool.inputSchema.safeParse(input)

@@ -1,3 +1,4 @@
+// 本文件：工具（能力）契约与相关类型，所有能力都实现这一个接口，并提供其构建与渲染辅助函数。
 import type OpenAI from 'openai'
 import type { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -145,6 +146,7 @@ export type ToolContext = {
  * cf. buildTool() in src/Tool.ts.
  * 参见 src/Tool.ts 的 buildTool()。
  */
+// 本函数：为工具定义补上「失败即关闭」的默认值（非只读、非并发安全、默认放行）。
 export function buildTool<Schema extends z.ZodType>(
   definition: Tool<Schema>,
 ): Required<Pick<Tool<Schema>, 'isReadOnly' | 'isConcurrencySafe' | 'checkPermissions'>> &
@@ -161,6 +163,7 @@ export function buildTool<Schema extends z.ZodType>(
  * Render the tool list into the shape the OpenAI API expects.
  * 将工具列表转换为 OpenAI API 期望的结构。
  */
+// 本函数：把工具列表连同由 zod 派生的 JSON Schema 转成 OpenAI API 期望的结构。
 export function toApiTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletionTool[] {
   return tools.map(tool => ({
     type: 'function',
@@ -179,6 +182,7 @@ export function toApiTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletio
  * Default transcript line when a tool does not supply `renderCall`.
  * 工具未提供 `renderCall` 时的默认会话记录行。
  */
+// 本函数：工具未自定义 renderCall 时，生成其调用在会话记录中的默认单行展示。
 export function defaultRenderCall(tool: Tool, input: unknown): string {
   if (tool.renderCall) return tool.renderCall(input)
   const json = JSON.stringify(input)

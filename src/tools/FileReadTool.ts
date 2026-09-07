@@ -1,3 +1,4 @@
+// 本文件：Read 工具——带行号读取文件，并登记读取状态供后续编辑校验使用。
 import { readFileSync, statSync } from 'node:fs'
 import { z } from 'zod'
 import { buildTool } from '../Tool.js'
@@ -48,6 +49,7 @@ export const FileReadTool = buildTool({
     return data ? `${data.lines} lines` : 'read'
   },
 
+  // 本函数：读取前校验目标存在且不是目录。
   validateInput(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
     let stat
@@ -62,6 +64,7 @@ export const FileReadTool = buildTool({
     return { ok: true }
   },
 
+  // 本函数：按 offset/limit 分页读取文件、加行号返回，并记录本次读取的时刻与 mtime。
   async execute(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
     const stat = statSync(path)

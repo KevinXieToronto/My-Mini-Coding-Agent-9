@@ -1,3 +1,4 @@
+// 本文件：Write 工具——整体写入或新建文件，覆盖已存在文件前要求先读过。
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { z } from 'zod'
@@ -37,6 +38,7 @@ export const FileWriteTool = buildTool({
     return `${data.created ? 'created' : 'updated'}, ${data.lines} lines`
   },
 
+  // 本函数：文件已存在且本会话未读过时拒绝覆盖，避免丢失看不见的内容。
   validateInput(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
     if (existsSync(path) && !ctx.readFileState.has(path)) {
@@ -50,6 +52,7 @@ export const FileWriteTool = buildTool({
     return { ok: true }
   },
 
+  // 本函数：补建所需目录并整体写入文件，随后刷新读取状态缓存。
   async execute(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
     const created = !existsSync(path)

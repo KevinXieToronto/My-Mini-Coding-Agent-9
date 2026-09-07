@@ -86,3 +86,13 @@ if (toolCalls.length === 0) {
  * 能力契约：所有能力均实现此接口。
  */
 ```
+
+### Chinese header comments
+
+Every `.ts` / `.tsx` file opens with a one-line Chinese comment saying what the file is and what it
+is used for (`// 本文件：…`), placed on line 1 — after the shebang, if there is one. Every function,
+class, and tool object gets a one-line Chinese comment (`// 本函数：…` / `// 本类：…`) directly above
+it saying what it does and what it is for. Spec/test files (`*.spec.ts`, `*.test.ts`) are exempt.
+
+**When writing new code or editing existing code, add these lines wherever a class or function has no
+comment. Never remove or rewrite existing comments — the Chinese one-liner is added alongside them.**

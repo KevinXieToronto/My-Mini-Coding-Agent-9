@@ -1,9 +1,11 @@
+// 本文件：路径工具——相对/绝对转换、展示用短路径，以及目录包含关系判断。
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 
 /**
  * Resolve a possibly-relative path against the working directory.
  * 把可能是相对路径的输入解析为基于工作目录的绝对路径。
  */
+// 本函数：把可能是相对路径的输入解析为基于工作目录的绝对路径。
 export function toAbsolute(cwd: string, path: string): string {
   return isAbsolute(path) ? resolve(path) : resolve(cwd, path)
 }
@@ -12,6 +14,7 @@ export function toAbsolute(cwd: string, path: string): string {
  * Short, stable label for the transcript.
  * 会话记录中简短稳定的路径标签。
  */
+// 本函数：生成相对工作目录的简短展示路径，越界时回退为原路径。
 export function toDisplayPath(cwd: string, path: string): string {
   const rel = relative(cwd, toAbsolute(cwd, path))
   return rel && !rel.startsWith('..') ? rel : path
@@ -26,6 +29,7 @@ export function toDisplayPath(cwd: string, path: string): string {
  * 加上 `sep` 才能避免把 C:\project-secrets 误判为在 C:\project 内。
  * Windows 路径按大小写不敏感比较。
  */
+// 本函数：判断路径是否位于指定根目录之内，用分隔符边界防止同前缀目录误判。
 export function isInside(root: string, path: string): boolean {
   const a = resolve(root).toLowerCase()
   const b = resolve(path).toLowerCase()

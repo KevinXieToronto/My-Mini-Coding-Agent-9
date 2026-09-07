@@ -1,3 +1,4 @@
+// 本文件：设置的分层加载与保存，以及 .env 环境变量的载入。
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -35,18 +36,22 @@ const DEFAULTS: Settings = {
  * %USERPROFILE%\.mini-cc
  * 用户配置目录。
  */
+// 本函数：返回用户级配置目录路径。
 export function userConfigDir(): string {
   return join(homedir(), CONFIG_DIR_NAME)
 }
 
+// 本函数：返回用户级 settings.json 的路径。
 export function userSettingsPath(): string {
   return join(userConfigDir(), 'settings.json')
 }
 
+// 本函数：返回项目级 settings.json 的路径。
 export function projectSettingsPath(cwd: string): string {
   return join(cwd, CONFIG_DIR_NAME, 'settings.json')
 }
 
+// 本函数：读取并解析 JSON 设置文件；文件不存在或格式非法时返回空对象。
 function readJSONIfExists(path: string): Partial<Settings> {
   if (!existsSync(path)) return {}
   try {
@@ -57,6 +62,7 @@ function readJSONIfExists(path: string): Partial<Settings> {
   }
 }
 
+// 本函数：按「默认值 < 用户设置 < 项目设置」分层合并出最终设置。
 export function loadSettings(cwd: string = process.cwd()): Settings {
   return {
     ...DEFAULTS,
@@ -65,6 +71,7 @@ export function loadSettings(cwd: string = process.cwd()): Settings {
   }
 }
 
+// 本函数：把补丁合并进用户级设置并写回磁盘。
 export function saveUserSettings(patch: Partial<Settings>): void {
   mkdirSync(userConfigDir(), { recursive: true })
   const merged = { ...readJSONIfExists(userSettingsPath()), ...patch }
@@ -76,6 +83,7 @@ export function saveUserSettings(patch: Partial<Settings>): void {
  * need no dotenv dependency.
  * 若项目根目录存在 .env 则加载。Node 22 自带 loadEnvFile，无需 dotenv 依赖。
  */
+// 本函数：若项目根存在 .env，用 Node 内置能力加载其中的环境变量。
 export function loadEnvFile(cwd: string = process.cwd()): void {
   const path = join(cwd, '.env')
   if (!existsSync(path)) return

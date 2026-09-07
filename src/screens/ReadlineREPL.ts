@@ -1,3 +1,4 @@
+// 本文件：基于 readline 的最简交互式 REPL，负责读取用户输入、驱动代理循环并渲染其事件。
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import type { Settings } from '../utils/config.js'
@@ -13,6 +14,7 @@ import { PRODUCT_NAME, VERSION } from '../constants/product.js'
  * 刻意做得简陋的 REPL。第 7 章会换成 Ink 应用；此刻保持朴素，
  * 是为了让屏幕上唯一值得注意的东西是代理循环本身。
  */
+// 本函数：REPL 主循环——逐行读取输入，每回合建立 AbortController 使 Ctrl+C 只中断当前回合。
 export async function runReadlineREPL(settings: Settings): Promise<void> {
   const rl = createInterface({ input: stdin, output: stdout })
   const messages: Message[] = []
@@ -64,6 +66,7 @@ export async function runReadlineREPL(settings: Settings): Promise<void> {
  * 消费代理循环产出的事件。注意 `for await ... of` 拿不到生成器的 return 值，
  * 因此手动驱动迭代器。
  */
+// 本函数：手动驱动 query 生成器，边渲染事件边取得生成器的回合终止原因。
 async function drainTurn(
   messages: Message[],
   settings: Settings,
@@ -106,6 +109,7 @@ async function drainTurn(
   }
 }
 
+// 本函数：按回合终止原因向终端打印相应的结束提示。
 function reportTerminal(terminal: Terminal): void {
   switch (terminal.reason) {
     case 'completed':
@@ -123,17 +127,20 @@ function reportTerminal(terminal: Terminal): void {
   }
 }
 
+// 本函数：把工具入参 JSON 压成单行并截断，便于单行展示。
 function compact(json: string): string {
   const text = json.replace(/\s+/g, ' ').trim()
   return text.length > 80 ? `${text.slice(0, 77)}...` : text
 }
 
+// 本函数：只保留工具结果的前几行作为预览，避免刷屏。
 function preview(result: string): string {
   const lines = result.split('\n')
   if (lines.length <= 6) return result
   return `${lines.slice(0, 6).join('\n')}\n... (+${lines.length - 6} lines)`
 }
 
+// 本函数：为多行文本的后续行补齐缩进，使终端输出对齐。
 function indent(text: string): string {
   return text.split('\n').join('\n     ')
 }
