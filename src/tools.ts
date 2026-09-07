@@ -6,6 +6,8 @@ import { FileWriteTool } from './tools/FileWriteTool.js'
 import { FileEditTool } from './tools/FileEditTool.js'
 import { GlobTool } from './tools/GlobTool.js'
 import { GrepTool } from './tools/GrepTool.js'
+import { BashTool } from './tools/BashTool.js'
+import { PowerShellTool } from './tools/PowerShellTool.js'
 
 /**
  * The tool registry.
@@ -33,6 +35,8 @@ export function getAllTools(): Tool[] {
     FileEditTool,
     GlobTool,
     GrepTool,
+    BashTool,
+    PowerShellTool,
     ListDirTool,
   ] as unknown as Tool[]
 }

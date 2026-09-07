@@ -1,9 +1,10 @@
 // 本文件：基于 readline 的最简交互式 REPL，负责读取用户输入、驱动代理循环并渲染其事件。
-import { createInterface } from 'node:readline/promises'
+import { createInterface, type Interface } from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import type { Settings } from '../utils/config.js'
 import type { Message } from '../types/message.js'
-import { query, type Terminal } from '../query.js'
+import type { ToolContext } from '../Tool.js'
+import { query, type CanUseTool, type QueryParams, type Terminal } from '../query.js'
 import { getAllTools } from '../tools.js'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
 
@@ -19,6 +20,15 @@ export async function runReadlineREPL(settings: Settings): Promise<void> {
   const rl = createInterface({ input: stdin, output: stdout })
   const messages: Message[] = []
   const tools = getAllTools()
+
+  // Session-level state, hoisted out of the loop so "always allow" and the
+  // read-before-write cache survive across turns.
+  // 会话级状态提到循环外，使「总是允许」与「先读后写」缓存跨回合存活。
+  const toolContext: Omit<ToolContext, 'abortController'> = {
+    cwd: process.cwd(),
+    readFileState: new Map(),
+    sessionAllow: new Set(),
+  }
 
   console.log(`${PRODUCT_NAME} v${VERSION}  ·  model: ${settings.model}`)
   console.log(`tools: ${tools.map(t => t.name).join(', ')}`)
@@ -50,7 +60,13 @@ export async function runReadlineREPL(settings: Settings): Promise<void> {
     rl.on('SIGINT', onSigint)
 
     try {
-      const terminal = await drainTurn(messages, settings, tools, abortController)
+      const terminal = await drainTurn({
+        messages,
+        settings,
+        tools,
+        toolContext: { ...toolContext, abortController },
+        canUseTool: makeApprovalPrompt(rl, toolContext.sessionAllow),
+      })
       reportTerminal(terminal)
     } finally {
       rl.off('SIGINT', onSigint)
@@ -67,18 +83,8 @@ export async function runReadlineREPL(settings: Settings): Promise<void> {
  * 因此手动驱动迭代器。
  */
 // 本函数：手动驱动 query 生成器，边渲染事件边取得生成器的回合终止原因。
-async function drainTurn(
-  messages: Message[],
-  settings: Settings,
-  tools: ReturnType<typeof getAllTools>,
-  abortController: AbortController,
-): Promise<Terminal> {
-  const iterator = query({
-    messages,
-    settings,
-    tools,
-    toolContext: { cwd: process.cwd(), abortController, readFileState: new Map() },
-  })
+async function drainTurn(params: QueryParams): Promise<Terminal> {
+  const iterator = query(params)
 
   let printedAssistantPrefix = false
 
@@ -124,6 +130,32 @@ function reportTerminal(terminal: Terminal): void {
     case 'model_error':
       stdout.write(`\n[model error: ${terminal.error}]\n\n`)
       break
+  }
+}
+
+/**
+ * Ask the human. Three answers:
+ *   y  yes, once
+ *   n  no  (the model gets a tool_result saying so, and adapts)
+ *   a  yes, and stop asking for this tool this session
+ * 询问人类。三种答复：
+ *   y  同意本次
+ *   n  拒绝（模型会收到说明此事的 tool_result 并自行调整）
+ *   a  同意，且本会话不再为该工具询问
+ */
+// 本函数：构造权限询问回调，在终端读取 y/n/a 并维护会话级「总是允许」集合。
+function makeApprovalPrompt(rl: Interface, sessionAllow: Set<string>): CanUseTool {
+  return async ({ tool, message }) => {
+    stdout.write(`\n  ⚠  ${message}\n`)
+    while (true) {
+      const answer = (await rl.question('     Allow? [y]es / [n]o / [a]lways: ')).trim().toLowerCase()
+      if (answer === 'y' || answer === 'yes') return true
+      if (answer === 'n' || answer === 'no' || answer === '') return false
+      if (answer === 'a' || answer === 'always') {
+        sessionAllow.add(tool.name)
+        return true
+      }
+    }
   }
 }
 

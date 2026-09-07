@@ -4,7 +4,8 @@ import type { Settings } from './utils/config.js'
 import type { Message, ToolCall } from './types/message.js'
 import { toApiMessages } from './types/message.js'
 import { streamAssistantTurn, type Usage } from './services/api/stream.js'
-import { toApiTools, type Tool, type ToolContext } from './Tool.js'
+import { toApiTools, type PermissionResult, type Tool, type ToolContext } from './Tool.js'
+import { evaluatePermission } from './utils/permissions.js'
 
 /**
  * THE AGENT LOOP.
@@ -59,11 +60,29 @@ export type QueryParams = {
   tools: Tool[]
   toolContext: ToolContext
   maxTurns?: number
+  /**
+   * Asks the human. Called only when the gate returns 'ask'. Returning false
+   * denies the call — which becomes a tool_result, not an exception, so the
+   * model can choose a different approach.
+   * 询问人类。仅当闸门返回 'ask' 时调用。返回 false 即拒绝该调用——
+   * 拒绝会变成一条 tool_result 而非异常，模型因此可以改用别的办法。
+   */
+  canUseTool: CanUseTool
 }
+
+/**
+ * The callback the UI supplies to answer an approval prompt.
+ * UI 提供的回调，用于回答批准询问。
+ */
+export type CanUseTool = (request: {
+  tool: Tool
+  input: unknown
+  message: string
+}) => Promise<boolean>
 
 // 本函数：代理主循环——反复请求模型并执行其工具调用，直到没有工具调用或触发终止条件。
 export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Terminal> {
-  const { messages, settings, tools, toolContext } = params
+  const { messages, settings, tools, toolContext, canUseTool } = params
   const maxTurns = params.maxTurns ?? settings.maxTurns
   const signal = toolContext.abortController.signal
 
@@ -153,7 +172,7 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
       }
 
       yield { type: 'tool_start', call }
-      const { result, isError } = await runOneTool(call, byName, toolContext)
+      const { result, isError } = await runOneTool(call, byName, toolContext, canUseTool)
       messages.push({ role: 'tool', toolCallId: call.id, content: result, isError })
       yield { type: 'tool_end', call, result, isError }
     }
@@ -181,6 +200,7 @@ async function runOneTool(
   call: ToolCall,
   byName: Map<string, Tool>,
   ctx: ToolContext,
+  canUseTool: CanUseTool,
 ): Promise<{ result: string; isError: boolean }> {
   const tool = byName.get(call.name)
   if (!tool) {
@@ -215,6 +235,24 @@ async function runOneTool(
   const validation = tool.validateInput?.(input, ctx)
   if (validation && !validation.ok) {
     return { result: `Error: ${validation.message}`, isError: true }
+  }
+
+  // THE GATE. Everything above this line was validation; this is authorisation.
+  // 闸门。此线之上都是「校验」，这里才是「授权」。
+  const decision: PermissionResult = evaluatePermission(tool, input, ctx)
+  if (decision.behavior === 'deny') {
+    return { result: `PermissionDenied: ${decision.message}`, isError: true }
+  }
+  if (decision.behavior === 'ask') {
+    const approved = await canUseTool({ tool, input, message: decision.message })
+    if (!approved) {
+      return {
+        result:
+          'PermissionDenied: the user declined this action. ' +
+          'Do not retry it. Explain what you wanted to do, or propose an alternative.',
+        isError: true,
+      }
+    }
   }
 
   try {

@@ -136,6 +136,12 @@ export type ToolContext = {
    * FileEditTool 拒绝编辑未曾读过、或已在背后被改动的文件。参见 ToolUseContext 的 readFileState。
    */
   readFileState: Map<string, { timestamp: number; mtimeMs: number }>
+  /**
+   * Tools the user chose "always allow" for, this session only. Ch.9 replaces
+   * this with persisted allow/deny rules.
+   * 用户本会话选了「总是允许」的工具集合。第 9 章会换成持久化的允许/拒绝规则。
+   */
+  sessionAllow: Set<string>
 }
 
 /**
