@@ -10,7 +10,9 @@ export type CliOptions = {
 
 /**
  * Real CLI assembly: resolve configuration, then choose a run mode.
+ * 真正的 CLI 组装：先解析配置，再选择运行模式。
  * cf. src/main.tsx in the Claude Code tree (~800 KB there; a few lines here).
+ * 参见 Claude Code 的 src/main.tsx（那边约 800 KB，这里只有几行）。
  */
 export async function runCli(opts: CliOptions): Promise<void> {
   process.chdir(opts.cwd)

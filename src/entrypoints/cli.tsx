@@ -3,11 +3,15 @@ import { PRODUCT_NAME, VERSION } from '../constants/product.js'
 
 /**
  * The CLI dispatcher.
+ * CLI 调度器。
  *
  * cf. src/entrypoints/cli.tsx in the Claude Code tree, which dispatches about a
  * dozen run modes before the main CLI is ever imported. `--version` there
  * answers with zero imports beyond that one file. We keep the same shape: the
  * expensive REPL is behind a dynamic import so cheap commands stay cheap.
+ * 参见 Claude Code 的 src/entrypoints/cli.tsx：在导入主 CLI 前先分发十余种运行模式，
+ * `--version` 只需该文件本身。此处保持同样结构：昂贵的 REPL 藏在动态 import 之后，
+ * 让廉价命令保持廉价。
  */
 async function main(): Promise<void> {
   const program = new Command()
@@ -23,6 +27,7 @@ async function main(): Promise<void> {
   const opts = program.opts()
 
   // Dynamic import: the REPL and the model client are only loaded when needed.
+  // 动态 import：REPL 与模型客户端按需加载。
   const { runCli } = await import('../main.js')
   await runCli(opts)
 }

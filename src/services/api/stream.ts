@@ -5,7 +5,9 @@ import { getClient } from './client.js'
 
 /**
  * Events yielded while a single model response streams in.
+ * 单次模型响应流式返回期间产出的事件。
  * cf. the StreamEvent union threaded through src/query.ts.
+ * 参见贯穿 src/query.ts 的 StreamEvent 联合类型。
  */
 export type StreamEvent =
   | { type: 'request_start' }
@@ -23,11 +25,14 @@ export type StreamParams = {
 
 /**
  * Stream one assistant turn.
+ * 流式处理一次助手回合。
  *
  * The awkward part of the OpenAI streaming format is tool calls: they arrive as
  * *fragments* keyed by an array index, with the name in the first chunk and the
  * JSON arguments dribbling in across many later chunks. We accumulate them into
  * a dense array and emit whole ToolCalls at the end.
+ * OpenAI 流式格式最麻烦的是工具调用：它们按数组下标分片到达，名字在首个分片，
+ * JSON 参数则零散分布在后续众多分片中。我们累积成密集数组，最后一次性产出完整 ToolCall。
  */
 export async function* streamAssistantTurn(
   params: StreamParams,

@@ -5,6 +5,7 @@ import type { Tool } from '../Tool.js'
 /**
  * A throwaway tool, here only so Chapter 3's loop has something to call.
  * Chapter 4 rebuilds it properly against the full Tool contract.
+ * 一次性工具，仅为让第 3 章的循环有东西可调用。第 4 章会按完整 Tool 契约重写。
  */
 export const ListDirTool: Tool = {
   name: 'ListDir',

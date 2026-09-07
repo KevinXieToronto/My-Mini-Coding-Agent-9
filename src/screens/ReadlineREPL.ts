@@ -10,6 +10,8 @@ import { PRODUCT_NAME, VERSION } from '../constants/product.js'
  * A deliberately primitive REPL. Chapter 7 replaces it with an Ink
  * application; keeping it dumb now means the agent loop is the only
  * interesting thing on screen.
+ * 刻意做得简陋的 REPL。第 7 章会换成 Ink 应用；此刻保持朴素，
+ * 是为了让屏幕上唯一值得注意的东西是代理循环本身。
  */
 export async function runReadlineREPL(settings: Settings): Promise<void> {
   const rl = createInterface({ input: stdin, output: stdout })
@@ -38,6 +40,7 @@ export async function runReadlineREPL(settings: Settings): Promise<void> {
     messages.push({ role: 'user', content: line })
 
     // One AbortController per turn. Ctrl+C aborts the turn, not the process.
+    // 每回合一个 AbortController。Ctrl+C 中断的是回合，不是进程。
     const abortController = new AbortController()
     const onSigint = () => {
       abortController.abort('interrupt')
@@ -58,6 +61,8 @@ export async function runReadlineREPL(settings: Settings): Promise<void> {
 /**
  * Consume the agent loop's events. Note the `for await ... of` cannot give us
  * the generator's RETURN value, so we drive the iterator by hand.
+ * 消费代理循环产出的事件。注意 `for await ... of` 拿不到生成器的 return 值，
+ * 因此手动驱动迭代器。
  */
 async function drainTurn(
   messages: Message[],

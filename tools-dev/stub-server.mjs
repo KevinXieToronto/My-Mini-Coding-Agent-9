@@ -1,6 +1,7 @@
 /**
  * A minimal OpenAI-compatible streaming server, for developing mini-cc without
  * burning API credits.
+ * 一个极简的 OpenAI 兼容流式服务器，用于开发 mini-cc 而不消耗 API 额度。
  *
  *   node tools-dev/stub-server.mjs
  *   set OPENAI_BASE_URL=http://127.0.0.1:8787/v1
@@ -8,6 +9,7 @@
  * Behaviour: it echoes the last user message. If that message starts with
  * "call:" it instead emits a tool call, e.g.
  *   call: ListDir {"path":"src"}
+ * 行为：回显最后一条用户消息；若该消息以 "call:" 开头，则改为发出一次工具调用。
  */
 import { createServer } from 'node:http'
 
@@ -41,6 +43,7 @@ createServer((req, res) => {
     const lastUser = [...messages].reverse().find(m => m.role === 'user')
     // If the previous step was a tool result, summarise it rather than looping
     // forever on the same instruction. Chapter 3 needs this.
+    // 若上一步是工具结果，则做摘要，避免就同一指令无限循环。第 3 章需要此行为。
     const text =
       last?.role === 'tool'
         ? 'done: ' + String(last.content).split('\n')[0]
@@ -62,6 +65,7 @@ createServer((req, res) => {
       sse(res, frame({ role: 'assistant', content: '' }))
       sse(res, frame({ tool_calls: [{ index: 0, id: 'call_stub_1', type: 'function', function: { name, arguments: '' } }] }))
       // Deliberately fragment the arguments, to prove the accumulator works.
+      // 故意将参数分片，以验证累加器可用。
       for (const piece of args.match(/.{1,8}/g) ?? []) {
         sse(res, frame({ tool_calls: [{ index: 0, function: { arguments: piece } }] }))
       }
