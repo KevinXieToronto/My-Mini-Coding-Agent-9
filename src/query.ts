@@ -1,7 +1,7 @@
 // 本文件：代理主循环所在处，驱动「调用模型 → 执行工具 → 回灌结果」的回合迭代。
 import type { z } from 'zod'
 import type { Settings } from './utils/config.js'
-import type { Message, ToolCall } from './types/message.js'
+import type { ApiMessage, Message, ToolCall } from './types/message.js'
 import { toApiMessages } from './types/message.js'
 import { streamAssistantTurn, type Usage } from './services/api/stream.js'
 import { toApiTools, type PermissionResult, type Tool, type ToolContext } from './Tool.js'
@@ -59,6 +59,11 @@ export type QueryParams = {
   settings: Settings
   tools: Tool[]
   toolContext: ToolContext
+  /**
+   * Prepended as a system message on every request. See src/context.ts.
+   * 每次请求前置为一条 system 消息。参见 src/context.ts。
+   */
+  systemPrompt?: string
   maxTurns?: number
   /**
    * Asks the human. Called only when the gate returns 'ask'. Returning false
@@ -82,7 +87,7 @@ export type CanUseTool = (request: {
 
 // 本函数：代理主循环——反复请求模型并执行其工具调用，直到没有工具调用或触发终止条件。
 export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Terminal> {
-  const { messages, settings, tools, toolContext, canUseTool } = params
+  const { messages, settings, tools, toolContext, systemPrompt, canUseTool } = params
   const maxTurns = params.maxTurns ?? settings.maxTurns
   const signal = toolContext.abortController.signal
 
@@ -107,7 +112,7 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
 
     try {
       for await (const event of streamAssistantTurn({
-        messages: toApiMessages(messages),
+        messages: withSystemPrompt(toApiMessages(messages), systemPrompt),
         tools: apiTools,
         settings,
         signal,
@@ -264,6 +269,19 @@ async function runOneTool(
       isError: true,
     }
   }
+}
+
+// 本函数：把系统提示词作为一条 system 消息前置到请求消息列表，而不写入持久化的会话记录。
+/**
+ * The system prompt is not part of the message history we persist — it is
+ * rebuilt on every request. Keeping it out of `messages` means compaction
+ * (Ch.11) can never accidentally summarise away the agent's instructions.
+ * 系统提示词不属于我们持久化的消息历史，而是每次请求重新拼装。
+ * 把它排除在 `messages` 之外，压缩（第 11 章）就绝不会误把代理的指令摘要掉。
+ */
+function withSystemPrompt(messages: ApiMessage[], systemPrompt?: string): ApiMessage[] {
+  if (!systemPrompt) return messages
+  return [{ role: 'system', content: systemPrompt }, ...messages]
 }
 
 // 本函数：把 zod 校验错误格式化成模型易读的多行提示。

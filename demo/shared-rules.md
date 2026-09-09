@@ -1,0 +1,1 @@
+- Always add a JSDoc comment to exported functions.

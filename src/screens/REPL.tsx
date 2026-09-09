@@ -8,6 +8,8 @@ import type { Tool, ToolContext } from '../Tool.js'
 import { query, type CanUseTool, type Terminal } from '../query.js'
 import { getAllTools } from '../tools.js'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
+import { buildSessionContext, expandUserMentions } from '../context.js'
+import { getSystemPrompt } from '../constants/prompts.js'
 import { Markdown } from '../components/Markdown.js'
 import { ToolCard, type ToolCardProps } from '../components/ToolCard.js'
 import { PermissionModal, type PermissionRequest } from '../components/PermissionModal.js'
@@ -57,6 +59,12 @@ export function REPL({ settings }: REPLProps): React.ReactElement {
     readFileState: new Map(),
     sessionAllow: new Set(),
   })
+  // Built once: git status and MINI.md are session-scoped, and rebuilding them
+  // every turn would break the provider's prompt cache for no real benefit.
+  // 只构建一次：git 状态与 MINI.md 属于会话级信息，逐回合重建只会白白打断服务商的提示词缓存。
+  const systemPromptRef = useRef<string>(
+    getSystemPrompt(toolsRef.current, buildSessionContext(process.cwd())),
+  )
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
@@ -98,7 +106,13 @@ export function REPL({ settings }: REPLProps): React.ReactElement {
       }
 
       setEntries(previous => [...previous, { kind: 'user', text }])
-      messagesRef.current.push({ role: 'user', content: text })
+      // @path mentions are expanded for the MODEL only; the transcript keeps
+      // showing what the user actually typed.
+      // @path 提及只为模型展开；转录里仍显示用户实际输入的文本。
+      messagesRef.current.push({
+        role: 'user',
+        content: expandUserMentions(text, sessionRef.current.cwd),
+      })
 
       const abortController = new AbortController()
       abortRef.current = abortController
@@ -110,6 +124,7 @@ export function REPL({ settings }: REPLProps): React.ReactElement {
           settings,
           tools: toolsRef.current,
           toolContext: { ...sessionRef.current, abortController },
+          systemPrompt: systemPromptRef.current,
           canUseTool,
           setEntries,
           setStreamingText,
@@ -206,6 +221,7 @@ type DriveParams = {
   settings: Settings
   tools: Tool[]
   toolContext: ToolContext
+  systemPrompt?: string
   canUseTool: CanUseTool
   setEntries: React.Dispatch<React.SetStateAction<Entry[]>>
   setStreamingText: React.Dispatch<React.SetStateAction<string>>

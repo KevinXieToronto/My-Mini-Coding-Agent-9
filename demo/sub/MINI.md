@@ -1,0 +1,1 @@
+- Subdirectory rule: prefix test files with spec-.
