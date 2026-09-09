@@ -54,7 +54,7 @@ export function REPL({ settings, permissionContext }: REPLProps): React.ReactEle
   // 循环读 ref（同步）；React 读 state（批量）。
   const messagesRef = useRef<Message[]>([])
   const abortRef = useRef<AbortController | undefined>(undefined)
-  const toolsRef = useRef<Tool[]>(getAllTools())
+  const toolsRef = useLazyRef<Tool[]>(getAllTools)
   const sessionRef = useRef<Omit<ToolContext, 'abortController'>>({
     cwd: process.cwd(),
     readFileState: new Map(),
@@ -64,7 +64,10 @@ export function REPL({ settings, permissionContext }: REPLProps): React.ReactEle
   // Built once: git status and MINI.md are session-scoped, and rebuilding them
   // every turn would break the provider's prompt cache for no real benefit.
   // 只构建一次：git 状态与 MINI.md 属于会话级信息，逐回合重建只会白白打断服务商的提示词缓存。
-  const systemPromptRef = useRef<string>(
+  //
+  // It has to go through useLazyRef to actually be built once — see the note there.
+  // 必须经由 useLazyRef 才真的只构建一次——原因见该函数处的说明。
+  const systemPromptRef = useLazyRef(() =>
     getSystemPrompt(toolsRef.current, buildSessionContext(process.cwd())),
   )
 
@@ -231,6 +234,25 @@ function describeTerminal(terminal: Terminal): string {
     default:
       return ''
   }
+}
+
+// 本函数：惰性 ref——初值只在首次渲染时计算一次，避免每次渲染重复执行昂贵的构建。
+/**
+ * A ref whose initial value is computed once, on first render.
+ * 初值只在首次渲染时计算一次的 ref。
+ *
+ * `useRef(expensive())` is a trap: the argument is evaluated on EVERY render
+ * and the result thrown away after the first. Harmless for a literal, ruinous
+ * when the expression shells out to git or walks the filesystem — every
+ * streamed token re-renders this screen, so that cost lands on every token.
+ * `useRef(expensive())` 是个陷阱：参数每次渲染都会求值，首次之后结果即被丢弃。
+ * 对字面量无害，但当表达式会 fork git 子进程或遍历文件系统时就是灾难——
+ * 每个流式 token 都会重渲染本屏，这份开销便摊到了每个 token 上。
+ */
+function useLazyRef<T>(make: () => T): React.MutableRefObject<T> {
+  const ref = useRef<T | undefined>(undefined)
+  if (ref.current === undefined) ref.current = make()
+  return ref as React.MutableRefObject<T>
 }
 
 type DriveParams = {
