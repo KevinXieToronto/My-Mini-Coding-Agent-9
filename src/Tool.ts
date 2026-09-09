@@ -1,5 +1,6 @@
 // 本文件：工具（能力）契约与相关类型，所有能力都实现这一个接口，并提供其构建与渲染辅助函数。
 import type OpenAI from 'openai'
+import type { PermissionContext } from './types/permissions.js'
 import type { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
@@ -137,11 +138,16 @@ export type ToolContext = {
    */
   readFileState: Map<string, { timestamp: number; mtimeMs: number }>
   /**
-   * Tools the user chose "always allow" for, this session only. Ch.9 replaces
-   * this with persisted allow/deny rules.
-   * 用户本会话选了「总是允许」的工具集合。第 9 章会换成持久化的允许/拒绝规则。
+   * Tools the user chose "always allow" for, this session only. It now sits
+   * alongside the persisted rules below rather than being the whole story.
+   * 用户本会话选了「总是允许」的工具集合。如今它与下面的持久化规则并存，不再是全部。
    */
   sessionAllow: Set<string>
+  /**
+   * Modes, rules and the path jail. See src/types/permissions.ts.
+   * 模式、规则与路径沙箱。参见 src/types/permissions.ts。
+   */
+  permissions: PermissionContext
 }
 
 /**

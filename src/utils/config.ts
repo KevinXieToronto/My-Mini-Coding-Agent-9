@@ -1,8 +1,10 @@
 // 本文件：设置的分层加载与保存，以及 .env 环境变量的载入。
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { CONFIG_DIR_NAME } from '../constants/product.js'
+import type { PermissionContext, PermissionMode } from '../types/permissions.js'
+import { parseRules } from './permissions.js'
 
 /**
  * Settings are layered, lowest precedence first:
@@ -19,11 +21,13 @@ export type Settings = {
   model: string
   baseURL?: string
   maxTurns: number
+  permissionMode: PermissionMode
   /**
-   * 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' — grows in Ch.9
-   * 权限模式，第 9 章扩充。
+   * Rule strings, e.g. { deny: ['Bash(rm *)'], allow: ['Bash(npm test)'] }
+   * 规则字符串，如 { deny: ['Bash(rm *)'], allow: ['Bash(npm test)'] }
    */
-  permissionMode: string
+  permissions?: { allow?: string[]; deny?: string[]; ask?: string[] }
+  additionalDirectories?: string[]
 }
 
 const DEFAULTS: Settings = {
@@ -62,12 +66,55 @@ function readJSONIfExists(path: string): Partial<Settings> {
   }
 }
 
-// 本函数：按「默认值 < 用户设置 < 项目设置」分层合并出最终设置。
+/**
+ * Layered load. Note `permissions` is MERGED rather than replaced: a project
+ * settings file must not be able to drop the deny rules a user set globally.
+ * 分层加载。注意 `permissions` 是「合并」而非「覆盖」：
+ * 项目设置绝不能把用户全局设的 deny 规则弄丢。
+ */
+// 本函数：按「默认值 < 用户设置 < 项目设置」分层合并设置，其中权限规则与附加目录取并集。
 export function loadSettings(cwd: string = process.cwd()): Settings {
+  const user = readJSONIfExists(userSettingsPath())
+  const project = readJSONIfExists(projectSettingsPath(cwd))
   return {
     ...DEFAULTS,
-    ...readJSONIfExists(userSettingsPath()),
-    ...readJSONIfExists(projectSettingsPath(cwd)),
+    ...user,
+    ...project,
+    permissions: {
+      allow: [...(user.permissions?.allow ?? []), ...(project.permissions?.allow ?? [])],
+      deny: [...(user.permissions?.deny ?? []), ...(project.permissions?.deny ?? [])],
+      ask: [...(user.permissions?.ask ?? []), ...(project.permissions?.ask ?? [])],
+    },
+    additionalDirectories: [
+      ...(user.additionalDirectories ?? []),
+      ...(project.additionalDirectories ?? []),
+    ],
+  }
+}
+
+/**
+ * Build the runtime permission context from settings plus CLI overrides.
+ * 由设置加上命令行覆盖，构建运行期的权限上下文。
+ */
+// 本函数：合成运行期权限上下文——模式、按来源解析的规则列表、以及解析为绝对路径的附加目录。
+export function buildPermissionContext(
+  settings: Settings,
+  cwd: string,
+  overrides: { mode?: PermissionMode; addDirs?: string[] } = {},
+): PermissionContext {
+  const userRaw = readJSONIfExists(userSettingsPath()).permissions
+  const projectRaw = readJSONIfExists(projectSettingsPath(cwd)).permissions
+  return {
+    mode: overrides.mode ?? settings.permissionMode,
+    rules: [
+      ...parseRules(userRaw, 'userSettings'),
+      ...parseRules(projectRaw, 'projectSettings'),
+    ],
+    additionalDirectories: [
+      ...(settings.additionalDirectories ?? []),
+      ...(overrides.addDirs ?? []),
+    ].map(dir => resolve(cwd, dir)),
+    cwd,
   }
 }
 

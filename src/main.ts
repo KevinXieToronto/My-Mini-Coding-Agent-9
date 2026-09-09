@@ -1,12 +1,16 @@
 // 本文件：CLI 组装层，解析配置与环境变量并选择运行模式（诊断输出或交互式 REPL）。
-import { loadEnvFile, loadSettings } from './utils/config.js'
+import { buildPermissionContext, loadEnvFile, loadSettings } from './utils/config.js'
 import { PRODUCT_NAME, VERSION } from './constants/product.js'
+import { PERMISSION_MODES, type PermissionMode } from './types/permissions.js'
+import { formatRule } from './utils/permissions.js'
 
 export type CliOptions = {
   print?: string
   model?: string
   cwd: string
   debug: boolean
+  permissionMode?: string
+  addDir?: string[]
 }
 
 /**
@@ -23,12 +27,43 @@ export async function runCli(opts: CliOptions): Promise<void> {
   const settings = loadSettings(opts.cwd)
   if (opts.model) settings.model = opts.model
 
+  // Fail LOUDLY on an unknown mode. Silently falling back to `default` would
+  // be safe, but a typo'd `--permission-mode plna` that quietly starts asking
+  // for everything teaches the user to distrust the flag.
+  // 未知模式要「大声」报错。悄悄回退到 default 虽然安全，
+  // 但把 `--permission-mode plna` 这类手误静默吞掉，只会让用户不再信任这个参数。
+  if (opts.permissionMode) {
+    if (!(PERMISSION_MODES as string[]).includes(opts.permissionMode)) {
+      throw new Error(
+        `Unknown permission mode "${opts.permissionMode}". ` +
+          `Valid modes: ${PERMISSION_MODES.join(', ')}`,
+      )
+    }
+    settings.permissionMode = opts.permissionMode as PermissionMode
+  }
+  if (opts.addDir?.length) {
+    settings.additionalDirectories = [...(settings.additionalDirectories ?? []), ...opts.addDir]
+  }
+
+  const permissionContext = buildPermissionContext(settings, process.cwd())
+
   if (opts.debug) {
     console.log(`${PRODUCT_NAME} v${VERSION}`)
     console.log(`cwd:      ${process.cwd()}`)
     console.log(`model:    ${settings.model}`)
     console.log(`baseURL:  ${settings.baseURL ?? process.env.OPENAI_BASE_URL ?? '(openai default)'}`)
     console.log(`api key:  ${process.env.OPENAI_API_KEY ? 'set' : 'MISSING'}`)
+    console.log(`mode:     ${permissionContext.mode}`)
+    console.log(
+      `rules:    ${
+        permissionContext.rules.length === 0
+          ? '(none)'
+          : permissionContext.rules
+              .map(rule => `${rule.behavior} ${formatRule(rule)}`)
+              .join(', ')
+      }`,
+    )
+    console.log(`add-dir:  ${permissionContext.additionalDirectories.join(', ') || '(none)'}`)
     const boot = globalThis.__MINI_CC_BOOT_TIME__
     if (boot) console.log(`boot:     ${Date.now() - boot}ms`)
     return
@@ -41,7 +76,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
   // 走非交互路径，而不是抛「Raw mode is not supported」。
   if (opts.print !== undefined || !process.stdin.isTTY) {
     const { runPrintMode } = await import('./cli/print.js')
-    await runPrintMode(settings, opts.print)
+    await runPrintMode(settings, permissionContext, opts.print)
     return
   }
 
@@ -50,6 +85,6 @@ export async function runCli(opts: CliOptions): Promise<void> {
     import('react'),
     import('./screens/REPL.js'),
   ])
-  const instance = render(createElement(REPL, { settings }))
+  const instance = render(createElement(REPL, { settings, permissionContext }))
   await instance.waitUntilExit()
 }

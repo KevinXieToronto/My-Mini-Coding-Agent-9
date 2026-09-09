@@ -21,6 +21,15 @@ export function toDisplayPath(cwd: string, path: string): string {
 }
 
 /**
+ * Forward slashes, for glob matching. Windows paths arrive with backslashes.
+ * 统一成正斜杠以便 glob 匹配：Windows 路径带的是反斜杠。
+ */
+// 本函数：把路径中的反斜杠换成正斜杠，供 glob 匹配使用。
+export function toPosixPath(path: string): string {
+  return path.split('\\').join('/')
+}
+
+/**
  * Is `path` inside `root`? Used by the path jail in Ch.9.
  * `path` 是否位于 `root` 之内？第 9 章的路径沙箱会用到。
  *

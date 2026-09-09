@@ -24,6 +24,14 @@ async function main(): Promise<void> {
     .option('-m, --model <model>', 'model id to use')
     .option('-c, --cwd <dir>', 'working directory', process.cwd())
     .option('--debug', 'print diagnostic output', false)
+    .option(
+      '--permission-mode <mode>',
+      'default | acceptEdits | plan | bypassPermissions',
+    )
+    .option(
+      '--add-dir <dir...>',
+      'additional directories the agent may write to',
+    )
 
   program.parse(process.argv)
   const opts = program.opts()

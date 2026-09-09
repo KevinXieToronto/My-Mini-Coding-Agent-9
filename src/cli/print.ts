@@ -1,6 +1,7 @@
 // 本文件：非交互（-p / 管道 / 无 TTY）模式：一次提问、纯文本输出、结束退出，权限默认全部拒绝。
 import { stdin, stdout } from 'node:process'
 import type { Settings } from '../utils/config.js'
+import type { PermissionContext } from '../types/permissions.js'
 import type { Message } from '../types/message.js'
 import { query } from '../query.js'
 import { getAllTools } from '../tools.js'
@@ -24,7 +25,11 @@ import { getAllTools } from '../tools.js'
  * auto-approving in a script is how an agent deletes a build server.
  * 这里权限默认拒绝：没有人可问；脚本里自动批准，正是代理删掉构建服务器的方式。
  */
-export async function runPrintMode(settings: Settings, prompt?: string): Promise<void> {
+export async function runPrintMode(
+  settings: Settings,
+  permissions: PermissionContext,
+  prompt?: string,
+): Promise<void> {
   const text = prompt ?? (await readAllStdin())
   if (!text.trim()) {
     stdout.write('No prompt given. Use -p "your prompt", or pipe text on stdin.\n')
@@ -43,6 +48,7 @@ export async function runPrintMode(settings: Settings, prompt?: string): Promise
       abortController,
       readFileState: new Map(),
       sessionAllow: new Set(),
+      permissions,
     },
     // No TTY means no human means no approval.
     // 没有 TTY 就没有人，也就没有批准。

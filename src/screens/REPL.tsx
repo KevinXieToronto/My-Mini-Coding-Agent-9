@@ -5,6 +5,7 @@ import type React from 'react'
 import type { Settings } from '../utils/config.js'
 import type { Message } from '../types/message.js'
 import type { Tool, ToolContext } from '../Tool.js'
+import type { PermissionContext } from '../types/permissions.js'
 import { query, type CanUseTool, type Terminal } from '../query.js'
 import { getAllTools } from '../tools.js'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
@@ -30,10 +31,10 @@ type Entry =
   | { kind: 'tool'; id: string; card: ToolCardProps }
   | { kind: 'notice'; text: string }
 
-export type REPLProps = { settings: Settings }
+export type REPLProps = { settings: Settings; permissionContext: PermissionContext }
 
 // 本组件：REPL 主屏，持有会话状态、转录列表、授权弹窗与输入框。
-export function REPL({ settings }: REPLProps): React.ReactElement {
+export function REPL({ settings, permissionContext }: REPLProps): React.ReactElement {
   const { exit } = useApp()
   const { stdout } = useStdout()
 
@@ -58,6 +59,7 @@ export function REPL({ settings }: REPLProps): React.ReactElement {
     cwd: process.cwd(),
     readFileState: new Map(),
     sessionAllow: new Set(),
+    permissions: permissionContext,
   })
   // Built once: git status and MINI.md are session-scoped, and rebuilding them
   // every turn would break the provider's prompt cache for no real benefit.
@@ -150,7 +152,10 @@ export function REPL({ settings }: REPLProps): React.ReactElement {
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text dimColor>
-          {PRODUCT_NAME} v{VERSION} · {settings.model} · {sessionRef.current.cwd}
+          {PRODUCT_NAME} v{VERSION} · {settings.model} · {sessionRef.current.cwd} ·{' '}
+        </Text>
+        <Text color={modeColour(permissionContext.mode)} bold={permissionContext.mode !== 'default'}>
+          {permissionContext.mode}
         </Text>
       </Box>
 
@@ -171,6 +176,18 @@ export function REPL({ settings }: REPLProps): React.ReactElement {
       {!busy && !permission ? <PromptInput onSubmit={submit} /> : null}
     </Box>
   )
+}
+
+/**
+ * Loud colour for a mode that has removed a guard rail.
+ * 护栏被拿掉的模式要用显眼的颜色。
+ */
+// 本函数：把权限模式映射成顶栏颜色，越危险越显眼。
+function modeColour(mode: string): string {
+  if (mode === 'bypassPermissions') return 'red'
+  if (mode === 'plan') return 'cyan'
+  if (mode === 'acceptEdits') return 'yellow'
+  return 'gray'
 }
 
 // 本组件：按转录记录的类型分派到相应渲染方式。

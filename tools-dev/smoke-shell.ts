@@ -8,6 +8,12 @@ const ctx: ToolContext = {
   abortController: new AbortController(),
   readFileState: new Map(),
   sessionAllow: new Set(),
+  permissions: {
+    mode: 'default',
+    rules: [],
+    additionalDirectories: [],
+    cwd: process.cwd(),
+  },
 }
 
 const cases = [
