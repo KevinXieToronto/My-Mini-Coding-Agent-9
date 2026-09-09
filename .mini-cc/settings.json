@@ -1,5 +1,5 @@
 {
-  "model": "gpt-4.1",
+  "permissionMode": "default",
   "permissions": {
     "deny": ["Bash(rm *)", "Edit(.env)"],
     "allow": ["Bash(npx tsc --noEmit)"]

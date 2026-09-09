@@ -15,6 +15,12 @@ const READ_ONLY_PREFIXES = [
   'git status', 'git log', 'git diff', 'git show', 'git branch', 'git remote -v',
   'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'find', 'grep', 'which', 'echo',
   'node --version', 'npm --version', 'npm ls', 'tsc --noEmit',
+  // Short forms too — models reach for `node -v` far more often than the long
+  // spelling, and prompting for a version check trains the user to stop reading
+  // the prompts.
+  // 短选项同样列入：模型写 `node -v` 远多于长写法，
+  // 为一次版本查询弹批准框，只会让用户养成不看提示的习惯。
+  'node -v', 'npm -v', 'git --version', 'git -v', 'python --version', 'python -V',
 ]
 
 /**

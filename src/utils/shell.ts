@@ -1,5 +1,6 @@
 // 本文件：子进程执行工具——跑一条 shell 命令并收集输出，负责超时、截断与中断响应。
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 
 export type ShellResult = {
   stdout: string
@@ -24,6 +25,42 @@ export type RunShellOptions = {
 }
 
 /**
+ * Locate the Git Bash executable.
+ * 定位 Git Bash 可执行文件。
+ *
+ * On Windows the bare name `bash` is a trap: PATH resolves it to
+ * C:\Windows\System32\bash.exe, which is the WSL launcher, not Git Bash. On a
+ * machine with no WSL distro installed every command then dies with
+ * "execvpe(/bin/bash) failed", which looks like a broken tool rather than a
+ * misresolved binary. So we look for Git Bash by path and only fall back to
+ * PATH off Windows, where `bash` means what it says.
+ * Windows 上直接用 `bash` 是个陷阱：PATH 会解析到 C:\Windows\System32\bash.exe，
+ * 那是 WSL 启动器而非 Git Bash。未装 WSL 发行版时，每条命令都会以
+ * "execvpe(/bin/bash) failed" 告终，看起来像工具坏了，实则是解析错了程序。
+ * 因此在 Windows 上按路径查找 Git Bash，仅在非 Windows 平台回落到 PATH。
+ */
+// 本函数：返回 Git Bash 的可执行路径；找不到时返回 null 由调用方给出可操作的报错。
+export function resolveBash(): string | null {
+  if (process.platform !== 'win32') return 'bash'
+
+  // MINI_CC_BASH is the escape hatch for a non-standard Git install.
+  // MINI_CC_BASH 是非标准 Git 安装位置的逃生口。
+  const candidates = [
+    process.env.MINI_CC_BASH,
+    process.env.ProgramFiles && `${process.env.ProgramFiles}\\Git\\bin\\bash.exe`,
+    process.env['ProgramFiles(x86)'] && `${process.env['ProgramFiles(x86)']}\\Git\\bin\\bash.exe`,
+    process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}\\Programs\\Git\\bin\\bash.exe`,
+  ].filter((path): path is string => Boolean(path))
+
+  return candidates.find(path => existsSync(path)) ?? null
+}
+
+const BASH_NOT_FOUND =
+  'Git Bash was not found. On Windows the `bash` on PATH is the WSL launcher, not Git Bash. ' +
+  'Install Git for Windows, or set MINI_CC_BASH to the full path of bash.exe. ' +
+  'The PowerShell tool works right now and can run this instead.'
+
+/**
  * Run a command in a child process and collect its output.
  * 在子进程中执行命令并收集其输出。
  *
@@ -44,9 +81,26 @@ export type RunShellOptions = {
 export function runShell(options: RunShellOptions): Promise<ShellResult> {
   const { command, cwd, timeoutMs, signal, shell } = options
 
+  const bashPath = shell === 'bash' ? resolveBash() : null
+
+  // Fail before spawning, with an actionable message. Spawning WSL instead
+  // "succeeds" and then exits 1, which reads as a failing command — the model
+  // has no way to tell that the shell itself was wrong.
+  // 在 spawn 之前就失败，并给出可操作的提示。误起 WSL 会「启动成功」再以 1 退出，
+  // 看起来像命令本身失败，模型根本无从判断是 shell 选错了。
+  if (shell === 'bash' && bashPath === null) {
+    return Promise.resolve({
+      stdout: '',
+      stderr: BASH_NOT_FOUND,
+      exitCode: null,
+      timedOut: false,
+      truncated: false,
+    })
+  }
+
   const [file, args] =
     shell === 'bash'
-      ? ['bash', ['-c', command]]
+      ? [bashPath as string, ['-c', command]]
       : ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command]]
 
   return new Promise<ShellResult>(resolve => {

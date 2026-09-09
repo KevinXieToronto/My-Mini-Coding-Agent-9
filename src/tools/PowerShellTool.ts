@@ -9,6 +9,8 @@ const DEFAULT_TIMEOUT_MS = 120_000
 const READ_ONLY_PREFIXES = [
   'Get-', 'Test-Path', 'Resolve-Path', 'Select-String', 'Measure-Object',
   'git status', 'git log', 'git diff', 'dotnet --version', 'node --version',
+  // 短选项同样列入：版本查询不该弹批准框。
+  'node -v', 'npm --version', 'npm -v', 'git --version', 'git -v',
 ]
 
 // 本函数：判断整条 PowerShell 命令是否只读——每个子命令都必须命中只读前缀名单。
