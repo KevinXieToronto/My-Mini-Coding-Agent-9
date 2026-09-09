@@ -68,6 +68,11 @@ export function estimateConversationTokens(messages: Message[], systemPrompt = '
  * 以 400 错误的形式撞上限，那是最糟的时机。
  */
 const CONTEXT_WINDOWS: [prefix: string, tokens: number][] = [
+  // Specs unpublished; conservative placeholders until real numbers land.
+  // 规格未公开；先用保守占位值，等官方数字确认后再改。
+  ['gpt-5.6-luna', 128_000],
+  ['gpt-5.6-terra', 128_000],
+  ['gpt-5', 400_000],
   ['gpt-4.1', 1_000_000],
   ['gpt-4o', 128_000],
   ['gpt-4-turbo', 128_000],
@@ -135,6 +140,7 @@ export function tokenState(messages: Message[], systemPrompt: string, model: str
  * 每百万 token 的美元单价。价格会变，这里只是起点，真实数字请写进 settings。
  */
 const PRICING: Record<string, { input: number; output: number }> = {
+  'gpt-5': { input: 1.25, output: 10.0 },
   'gpt-4.1': { input: 2.0, output: 8.0 },
   'gpt-4.1-mini': { input: 0.4, output: 1.6 },
   'gpt-4o': { input: 2.5, output: 10.0 },
