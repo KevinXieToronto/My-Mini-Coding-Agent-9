@@ -6,6 +6,8 @@ import { toApiMessages } from './types/message.js'
 import { streamAssistantTurn, type Usage } from './services/api/stream.js'
 import { toApiTools, type PermissionResult, type Tool, type ToolContext } from './Tool.js'
 import { evaluatePermission } from './utils/permissions.js'
+import { tokenState } from './utils/tokens.js'
+import { compactConversation } from './services/compact/compact.js'
 
 /**
  * THE AGENT LOOP.
@@ -45,6 +47,7 @@ export type Terminal =
 
 export type QueryEvent =
   | { type: 'request_start'; turn: number }
+  | { type: 'compacted'; tokensBefore: number; tokensAfter: number; method: string }
   | { type: 'text_delta'; text: string }
   | { type: 'assistant_message'; message: Message; usage?: Usage }
   | { type: 'tool_start'; call: ToolCall }
@@ -65,6 +68,9 @@ export type QueryParams = {
    */
   systemPrompt?: string
   maxTurns?: number
+  /** Set false to disable auto-compaction (Ch.11). */
+  /** 置为 false 可关闭自动压缩（第 11 章）。 */
+  autoCompact?: boolean
   /**
    * Asks the human. Called only when the gate returns 'ask'. Returning false
    * denies the call — which becomes a tool_result, not an exception, so the
@@ -108,6 +114,32 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
 
     turn += 1
     if (turn > maxTurns) return { reason: 'max_turns', turns: turn - 1 }
+
+    // --- 0: keep the context inside the window ---------------------------
+    // --- 第 0 步：把上下文压回窗口以内 ---
+    //
+    // This is the fourth design principle from ARCHITECTURE.md made concrete:
+    // recovery is a LOOP TRANSITION, not an exception. Running out of room is
+    // something the loop handles and continues from, not something that ends
+    // the turn.
+    // 这是 ARCHITECTURE.md 第四条设计原则的落地：恢复是循环状态转移，而非异常。
+    // 空间不够由循环自行处理并继续，而不是就此结束回合。
+    if (params.autoCompact !== false) {
+      const state = tokenState(messages, systemPrompt ?? '', settings.model)
+      if (state.shouldCompact) {
+        const result = await compactConversation(messages, settings, signal)
+        // Replace the caller's array IN PLACE: it is the same array the REPL
+        // and the session writer hold references to.
+        // 就地替换调用方的数组：REPL 与会话写入器持有的是同一个数组引用。
+        messages.splice(0, messages.length, ...result.messages)
+        yield {
+          type: 'compacted',
+          tokensBefore: result.tokensBefore,
+          tokensAfter: result.tokensAfter,
+          method: result.method,
+        }
+      }
+    }
 
     yield { type: 'request_start', turn }
 

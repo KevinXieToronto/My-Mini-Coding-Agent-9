@@ -5,6 +5,7 @@ import type React from 'react'
 import type { Settings } from '../utils/config.js'
 import type { Message } from '../types/message.js'
 import type { Tool, ToolContext } from '../Tool.js'
+import type { Usage } from '../services/api/stream.js'
 import { query, type CanUseTool, type Terminal } from '../query.js'
 import { getAllTools } from '../tools.js'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
@@ -18,6 +19,8 @@ import {
   type SessionSummary,
 } from '../utils/sessionStorage.js'
 import { getSystemPrompt } from '../constants/prompts.js'
+import { CostTracker, tokenState } from '../utils/tokens.js'
+import { compactConversation } from '../services/compact/compact.js'
 import { Markdown } from '../components/Markdown.js'
 import { ToolCard, type ToolCardProps } from '../components/ToolCard.js'
 import { PermissionModal, type PermissionRequest } from '../components/PermissionModal.js'
@@ -66,6 +69,9 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
   // 检查点与会话记录写入器和工具列表一样，都是会话级的。
   const fileHistoryRef = useRef(new FileHistory())
   const writerRef = useRef<SessionWriter>(new SessionWriter(process.cwd(), resume?.sessionId))
+  // Usage accumulates across the whole session, so it lives in a ref too.
+  // 用量要跨整个会话累计，因此同样放进 ref。
+  const costRef = useRef(new CostTracker())
   const sessionRef = useRef<Omit<ToolContext, 'abortController'>>({
     cwd: process.cwd(),
     readFileState: new Map(),
@@ -136,6 +142,39 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
         setEntries([])
         return
       }
+      if (text === '/context' || text === '/cost') {
+        setEntries(previous => [
+          ...previous,
+          {
+            kind: 'notice',
+            text: statusReport(
+              text,
+              messagesRef.current,
+              systemPromptRef.current,
+              settings.model,
+              costRef.current,
+            ),
+          },
+        ])
+        return
+      }
+      if (text === '/compact') {
+        setBusy(true)
+        try {
+          const result = await compactConversation(messagesRef.current, settings)
+          messagesRef.current.splice(0, messagesRef.current.length, ...result.messages)
+          setEntries([
+            ...entriesFromMessages(messagesRef.current),
+            {
+              kind: 'notice',
+              text: `[compacted via ${result.method}: ~${result.tokensBefore} -> ~${result.tokensAfter} tokens]`,
+            },
+          ])
+        } finally {
+          setBusy(false)
+        }
+        return
+      }
       if (text.startsWith('/rewind')) {
         const turns = Number(text.split(/\s+/)[1] ?? '1')
         const target = rewindTarget(messagesRef.current, Number.isFinite(turns) ? turns : 1)
@@ -178,6 +217,7 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
           systemPrompt: systemPromptRef.current,
           canUseTool,
           onMessage: message => writerRef.current.append(message),
+          onUsage: usage => costRef.current.record(usage),
           setEntries,
           setStreamingText,
         })
@@ -226,6 +266,35 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
       {!busy && !permission ? <PromptInput onSubmit={submit} /> : null}
     </Box>
   )
+}
+
+/** `/context` and `/cost` both render from the same numbers. */
+/** `/context` 与 `/cost` 渲染的是同一组数字。 */
+// 本函数：把当前 token 用量或累计花费渲染成一段可读的状态文本。
+function statusReport(
+  command: string,
+  messages: Message[],
+  systemPrompt: string,
+  model: string,
+  cost: CostTracker,
+): string {
+  const state = tokenState(messages, systemPrompt, model)
+  if (command === '/cost') {
+    const dollars = cost.estimateCost(model)
+    return [
+      `requests:  ${cost.requests}`,
+      `input:     ${cost.promptTokens.toLocaleString()} tokens`,
+      `output:    ${cost.completionTokens.toLocaleString()} tokens`,
+      `cost:      ${dollars === undefined ? 'unknown (no pricing for this model)' : `$${dollars.toFixed(4)}`}`,
+    ].join('\n')
+  }
+  const bar = '='.repeat(Math.round(state.percentUsed / 5)).padEnd(20, '.')
+  return [
+    `context:   [${bar}] ${state.percentUsed}%`,
+    `estimated: ~${state.used.toLocaleString()} / ${state.window.toLocaleString()} tokens`,
+    `compact at:~${state.threshold.toLocaleString()} tokens`,
+    `messages:  ${messages.length}`,
+  ].join('\n')
 }
 
 /**
@@ -356,6 +425,7 @@ type DriveParams = {
   systemPrompt?: string
   canUseTool: CanUseTool
   onMessage?: (message: Message) => void
+  onUsage: (usage: Usage) => void
   setEntries: React.Dispatch<React.SetStateAction<Entry[]>>
   setStreamingText: React.Dispatch<React.SetStateAction<string>>
 }
@@ -372,7 +442,7 @@ type DriveParams = {
  * 又清空 `streamingText`，所以从流式文本切到定稿消息不会闪烁。
  */
 async function drive(params: DriveParams): Promise<Terminal> {
-  const { setEntries, setStreamingText, ...queryParams } = params
+  const { setEntries, setStreamingText, onUsage, ...queryParams } = params
   const iterator = query(queryParams)
   const toolsByName = new Map(params.tools.map(tool => [tool.name, tool]))
 
@@ -386,8 +456,19 @@ async function drive(params: DriveParams): Promise<Terminal> {
         setStreamingText(previous => previous + event.text)
         break
 
+      case 'compacted':
+        setEntries(previous => [
+          ...previous,
+          {
+            kind: 'notice',
+            text: `[auto-compacted via ${event.method}: ~${event.tokensBefore} -> ~${event.tokensAfter} tokens]`,
+          },
+        ])
+        break
+
       case 'assistant_message': {
         const text = event.message.role === 'assistant' ? event.message.content : ''
+        if (event.usage) onUsage(event.usage)
         setStreamingText('')
         if (text.trim()) setEntries(previous => [...previous, { kind: 'assistant', text }])
         break
