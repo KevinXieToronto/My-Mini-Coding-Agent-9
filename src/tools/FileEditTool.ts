@@ -103,6 +103,10 @@ export const FileEditTool = buildTool({
   async execute(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
 
+    // Snapshot before we touch it, so /rewind can put it back.
+    // 动手前先快照，让 /rewind 能把它放回去。
+    ctx.fileHistory.track(path, ctx.messageIndex())
+
     // Read-modify-write with no awaits in between: nothing can interleave and
     // clobber the file. Claude Code marks the equivalent region with an
     // explicit "no awaits in this region" comment.

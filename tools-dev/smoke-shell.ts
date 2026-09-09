@@ -2,19 +2,9 @@
 import { BashTool, isReadOnlyCommand, splitCommand } from '../src/tools/BashTool.js'
 import { evaluatePermission } from '../src/utils/permissions.js'
 import type { Tool, ToolContext } from '../src/Tool.js'
+import { makeContext } from './testContext.js'
 
-const ctx: ToolContext = {
-  cwd: process.cwd(),
-  abortController: new AbortController(),
-  readFileState: new Map(),
-  sessionAllow: new Set(),
-  permissions: {
-    mode: 'default',
-    rules: [],
-    additionalDirectories: [],
-    cwd: process.cwd(),
-  },
-}
+const ctx: ToolContext = makeContext()
 
 const cases = [
   'git status',

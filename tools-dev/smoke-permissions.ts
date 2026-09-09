@@ -1,9 +1,10 @@
 // 本文件：权限系统的手工冒烟脚本，不接模型即可逐级验证判定阶梯、命令解析与路径沙箱。
-import { evaluatePermission, parseRules } from '../src/utils/permissions.js'
+import { evaluatePermission } from '../src/utils/permissions.js'
 import { parseCommand, commandMatches } from '../src/utils/bashParser.js'
 import { getAllTools } from '../src/tools.js'
 import type { Tool, ToolContext } from '../src/Tool.js'
 import type { PermissionMode } from '../src/types/permissions.js'
+import { makeContext } from './testContext.js'
 
 const tools = new Map(getAllTools().map(t => [t.name, t]))
 const cwd = process.cwd()
@@ -13,13 +14,7 @@ function ctx(
   mode: PermissionMode,
   raw?: { allow?: string[]; deny?: string[]; ask?: string[] },
 ): ToolContext {
-  return {
-    cwd,
-    abortController: new AbortController(),
-    readFileState: new Map(),
-    sessionAllow: new Set(),
-    permissions: { mode, rules: parseRules(raw, 'projectSettings'), additionalDirectories: [], cwd },
-  }
+  return makeContext({ cwd, mode, rules: raw })
 }
 
 // 本函数：跑一次判定并按「标签 / 行为 / 理由」对齐打印。

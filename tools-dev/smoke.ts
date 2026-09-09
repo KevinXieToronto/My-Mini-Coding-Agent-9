@@ -8,24 +8,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAllTools } from '../src/tools.js'
 import type { ToolContext } from '../src/Tool.js'
+import { makeContext } from './testContext.js'
 
 const cwd = mkdtempSync(join(tmpdir(), 'minicc-'))
 writeFileSync(join(cwd, 'hello.txt'), 'alpha\nbeta\ngamma\n', 'utf8')
 
-const ctx: ToolContext = {
-  cwd,
-  abortController: new AbortController(),
-  readFileState: new Map(),
-  // Smoke scripts have no interactive prompt; pre-approve everything.
-  // 冒烟脚本没有交互式确认，直接全部预先放行。
-  sessionAllow: new Set(getAllTools().map(t => t.name)),
-  permissions: {
-    mode: 'default',
-    rules: [],
-    additionalDirectories: [],
-    cwd: process.cwd(),
-  },
-}
+const ctx: ToolContext = makeContext({ cwd })
+// Smoke scripts have no interactive prompt; pre-approve everything.
+// 冒烟脚本没有交互式确认，直接全部预先放行。
+for (const tool of getAllTools()) ctx.sessionAllow.add(tool.name)
 
 const tools = new Map(getAllTools().map(t => [t.name, t]))
 

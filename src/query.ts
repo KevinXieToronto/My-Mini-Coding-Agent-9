@@ -73,6 +73,12 @@ export type QueryParams = {
    * 拒绝会变成一条 tool_result 而非异常，模型因此可以改用别的办法。
    */
   canUseTool: CanUseTool
+  /**
+   * Called for every message appended to the history, in order. This is the
+   * persistence seam: the loop does not know what a transcript is.
+   * 每条追加进历史的消息都会按序回调。这是持久化的接缝：循环本身不知道会话记录为何物。
+   */
+  onMessage?: (message: Message) => void
 }
 
 /**
@@ -90,6 +96,7 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
   const { messages, settings, tools, toolContext, systemPrompt, canUseTool } = params
   const maxTurns = params.maxTurns ?? settings.maxTurns
   const signal = toolContext.abortController.signal
+  const onMessage = params.onMessage ?? (() => {})
 
   const byName = new Map(tools.map(tool => [tool.name, tool]))
   const apiTools = toApiTools(tools)
@@ -140,6 +147,7 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
       ...(toolCalls.length ? { toolCalls } : {}),
     }
     messages.push(assistantMessage)
+    onMessage(assistantMessage)
     yield { type: 'assistant_message', message: assistantMessage, usage }
 
     // --- 3: no tool calls means the turn is over ----------------------------
@@ -166,19 +174,23 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
         // 每个 tool_use 必须有对应的 tool_result，否则下一次请求格式非法，
         // 因此为剩余调用合成错误结果。
         for (const pending of toolCalls.slice(toolCalls.indexOf(call))) {
-          messages.push({
+          const interrupted: Message = {
             role: 'tool',
             toolCallId: pending.id,
             content: 'Interrupted by user',
             isError: true,
-          })
+          }
+          messages.push(interrupted)
+          onMessage(interrupted)
         }
         return { reason: 'aborted', turns: turn }
       }
 
       yield { type: 'tool_start', call }
       const { result, isError } = await runOneTool(call, byName, toolContext, canUseTool)
-      messages.push({ role: 'tool', toolCallId: call.id, content: result, isError })
+      const toolMessage: Message = { role: 'tool', toolCallId: call.id, content: result, isError }
+      messages.push(toolMessage)
+      onMessage(toolMessage)
       yield { type: 'tool_end', call, result, isError }
     }
   }

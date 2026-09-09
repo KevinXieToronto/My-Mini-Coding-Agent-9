@@ -5,6 +5,7 @@ import type { PermissionContext } from '../types/permissions.js'
 import type { Message } from '../types/message.js'
 import { query } from '../query.js'
 import { getAllTools } from '../tools.js'
+import { FileHistory } from '../utils/fileHistory.js'
 
 // 本函数：以非交互方式跑一个回合，把流式文本直接写到 stdout。
 /**
@@ -49,6 +50,8 @@ export async function runPrintMode(
       readFileState: new Map(),
       sessionAllow: new Set(),
       permissions,
+      fileHistory: new FileHistory(),
+      messageIndex: () => messages.length,
     },
     // No TTY means no human means no approval.
     // 没有 TTY 就没有人，也就没有批准。

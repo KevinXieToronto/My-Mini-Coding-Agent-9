@@ -32,6 +32,9 @@ async function main(): Promise<void> {
       '--add-dir <dir...>',
       'additional directories the agent may write to',
     )
+    .option('-r, --resume [sessionId]', 'resume a previous session in this directory')
+    .option('--continue', 'resume the most recent session in this directory', false)
+    .option('--list-sessions', 'list saved sessions and exit', false)
 
   program.parse(process.argv)
   const opts = program.opts()

@@ -5,11 +5,18 @@ import type React from 'react'
 import type { Settings } from '../utils/config.js'
 import type { Message } from '../types/message.js'
 import type { Tool, ToolContext } from '../Tool.js'
-import type { PermissionContext } from '../types/permissions.js'
 import { query, type CanUseTool, type Terminal } from '../query.js'
 import { getAllTools } from '../tools.js'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
 import { buildSessionContext, expandUserMentions } from '../context.js'
+import { buildPermissionContext } from '../utils/config.js'
+import { FileHistory } from '../utils/fileHistory.js'
+import {
+  SessionWriter,
+  messagesFromTranscript,
+  readTranscript,
+  type SessionSummary,
+} from '../utils/sessionStorage.js'
 import { getSystemPrompt } from '../constants/prompts.js'
 import { Markdown } from '../components/Markdown.js'
 import { ToolCard, type ToolCardProps } from '../components/ToolCard.js'
@@ -31,10 +38,10 @@ type Entry =
   | { kind: 'tool'; id: string; card: ToolCardProps }
   | { kind: 'notice'; text: string }
 
-export type REPLProps = { settings: Settings; permissionContext: PermissionContext }
+export type REPLProps = { settings: Settings; resume?: SessionSummary }
 
-// 本组件：REPL 主屏，持有会话状态、转录列表、授权弹窗与输入框。
-export function REPL({ settings, permissionContext }: REPLProps): React.ReactElement {
+// 本组件：REPL 主屏，持有会话状态、转录列表、授权弹窗与输入框，并负责会话记录与回退。
+export function REPL({ settings, resume }: REPLProps): React.ReactElement {
   const { exit } = useApp()
   const { stdout } = useStdout()
 
@@ -55,12 +62,19 @@ export function REPL({ settings, permissionContext }: REPLProps): React.ReactEle
   const messagesRef = useRef<Message[]>([])
   const abortRef = useRef<AbortController | undefined>(undefined)
   const toolsRef = useLazyRef<Tool[]>(getAllTools)
+  // Checkpoints and the transcript writer are session-scoped, like the tool list.
+  // 检查点与会话记录写入器和工具列表一样，都是会话级的。
+  const fileHistoryRef = useRef(new FileHistory())
+  const writerRef = useRef<SessionWriter>(new SessionWriter(process.cwd(), resume?.sessionId))
   const sessionRef = useRef<Omit<ToolContext, 'abortController'>>({
     cwd: process.cwd(),
     readFileState: new Map(),
     sessionAllow: new Set(),
-    permissions: permissionContext,
+    permissions: buildPermissionContext(settings, process.cwd()),
+    fileHistory: fileHistoryRef.current,
+    messageIndex: () => messagesRef.current.length,
   })
+  const permissionContext = sessionRef.current.permissions
   // Built once: git status and MINI.md are session-scoped, and rebuilding them
   // every turn would break the provider's prompt cache for no real benefit.
   // 只构建一次：git 状态与 MINI.md 属于会话级信息，逐回合重建只会白白打断服务商的提示词缓存。
@@ -70,6 +84,19 @@ export function REPL({ settings, permissionContext }: REPLProps): React.ReactEle
   const systemPromptRef = useLazyRef(() =>
     getSystemPrompt(toolsRef.current, buildSessionContext(process.cwd())),
   )
+
+  // Replay a resumed transcript into the UI, once.
+  // 恢复的会话记录只回放一次到界面上。
+  const [restored, setRestored] = useState(false)
+  if (resume && !restored) {
+    const entries = readTranscript(resume.path)
+    messagesRef.current = messagesFromTranscript(entries)
+    // Continue the existing chain instead of opening a second root node.
+    // 接续已有链条，而不是开出第二个根节点。
+    writerRef.current.setParent(entries.at(-1)?.uuid ?? null)
+    setEntries(entriesFromMessages(messagesRef.current))
+    setRestored(true)
+  }
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
@@ -109,15 +136,34 @@ export function REPL({ settings, permissionContext }: REPLProps): React.ReactEle
         setEntries([])
         return
       }
+      if (text.startsWith('/rewind')) {
+        const turns = Number(text.split(/\s+/)[1] ?? '1')
+        const target = rewindTarget(messagesRef.current, Number.isFinite(turns) ? turns : 1)
+        const files = fileHistoryRef.current.rewindTo(target)
+        messagesRef.current = messagesRef.current.slice(0, target)
+        setEntries([
+          ...entriesFromMessages(messagesRef.current),
+          {
+            kind: 'notice',
+            text:
+              `[rewound to message ${target}` +
+              (files.length ? `; restored ${files.length} file(s)` : '') +
+              ']',
+          },
+        ])
+        return
+      }
 
       setEntries(previous => [...previous, { kind: 'user', text }])
       // @path mentions are expanded for the MODEL only; the transcript keeps
       // showing what the user actually typed.
       // @path 提及只为模型展开；转录里仍显示用户实际输入的文本。
-      messagesRef.current.push({
+      const userMessage: Message = {
         role: 'user',
         content: expandUserMentions(text, sessionRef.current.cwd),
-      })
+      }
+      messagesRef.current.push(userMessage)
+      writerRef.current.append(userMessage)
 
       const abortController = new AbortController()
       abortRef.current = abortController
@@ -131,6 +177,7 @@ export function REPL({ settings, permissionContext }: REPLProps): React.ReactEle
           toolContext: { ...sessionRef.current, abortController },
           systemPrompt: systemPromptRef.current,
           canUseTool,
+          onMessage: message => writerRef.current.append(message),
           setEntries,
           setStreamingText,
         })
@@ -222,6 +269,52 @@ function EntryView({ entry, width }: { entry: Entry; width: number }): React.Rea
   }
 }
 
+/**
+ * Rebuild transcript entries from a message list. Used after a resume and
+ * after a rewind. Tool calls collapse to a single card — we did not persist
+ * the UI state, only the API messages, which is the right trade: the
+ * transcript file stays small and provider-shaped.
+ * 从消息列表重建转录记录，用于恢复会话与回退之后。工具调用坍缩成单张卡片——
+ * 我们只持久化 API 消息、不存 UI 状态，这个取舍是对的：记录文件小且贴合供应商格式。
+ */
+// 本函数：把消息列表还原成界面上的转录记录数组。
+function entriesFromMessages(messages: Message[]): Entry[] {
+  const entries: Entry[] = []
+  for (const message of messages) {
+    if (message.role === 'user') entries.push({ kind: 'user', text: message.content })
+    else if (message.role === 'assistant' && message.content.trim()) {
+      entries.push({ kind: 'assistant', text: message.content })
+    } else if (message.role === 'tool') {
+      entries.push({
+        kind: 'tool',
+        id: message.toolCallId,
+        card: {
+          title: 'tool',
+          status: message.isError ? 'error' : 'done',
+          summary: message.content.split('\n')[0]?.slice(0, 100),
+        },
+      })
+    }
+  }
+  return entries
+}
+
+/**
+ * Index to truncate to, counting back `turns` USER messages.
+ * We rewind to before a user message, because that is the unit a human thinks
+ * in — "undo what you did after I asked for X".
+ * 往回数 `turns` 条用户消息得到截断下标。回退到某条用户消息之前，
+ * 因为这才是人类思考的单位——「把我说了 X 之后你做的都撤掉」。
+ */
+// 本函数：计算回退目标下标，按用户消息倒数 turns 条。
+function rewindTarget(messages: Message[], turns: number): number {
+  const userIndexes = messages
+    .map((message, index) => (message.role === 'user' ? index : -1))
+    .filter(index => index >= 0)
+  const target = userIndexes[userIndexes.length - turns]
+  return target ?? 0
+}
+
 // 本函数：把非正常结束的回合终态翻译成一行人类可读提示。
 function describeTerminal(terminal: Terminal): string {
   switch (terminal.reason) {
@@ -262,6 +355,7 @@ type DriveParams = {
   toolContext: ToolContext
   systemPrompt?: string
   canUseTool: CanUseTool
+  onMessage?: (message: Message) => void
   setEntries: React.Dispatch<React.SetStateAction<Entry[]>>
   setStreamingText: React.Dispatch<React.SetStateAction<string>>
 }

@@ -55,6 +55,10 @@ export const FileWriteTool = buildTool({
   // 本函数：补建所需目录并整体写入文件，随后刷新读取状态缓存。
   async execute(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
+
+    // Snapshot before we touch it, so /rewind can put it back.
+    // 动手前先快照，让 /rewind 能把它放回去。
+    ctx.fileHistory.track(path, ctx.messageIndex())
     const created = !existsSync(path)
 
     mkdirSync(dirname(path), { recursive: true })

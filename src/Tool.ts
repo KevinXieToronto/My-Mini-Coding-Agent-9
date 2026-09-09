@@ -1,6 +1,7 @@
 // 本文件：工具（能力）契约与相关类型，所有能力都实现这一个接口，并提供其构建与渲染辅助函数。
 import type OpenAI from 'openai'
 import type { PermissionContext } from './types/permissions.js'
+import type { FileHistory } from './utils/fileHistory.js'
 import type { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
@@ -148,6 +149,16 @@ export type ToolContext = {
    * 模式、规则与路径沙箱。参见 src/types/permissions.ts。
    */
   permissions: PermissionContext
+  /**
+   * Pre-edit snapshots, so Ch.10's rewind can undo file changes.
+   * 改动前的文件快照，使第 10 章的回退能撤销文件修改。
+   */
+  fileHistory: FileHistory
+  /**
+   * Where we are in the message list, for checkpoint bookkeeping.
+   * 当前在消息列表中的位置，用于检查点记账。
+   */
+  messageIndex: () => number
 }
 
 /**
