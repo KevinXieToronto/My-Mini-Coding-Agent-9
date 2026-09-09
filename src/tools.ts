@@ -1,5 +1,6 @@
 // 本文件：工具注册表，集中列出模型可见的全部内置工具。
 import type { Tool } from './Tool.js'
+import type { PermissionMode } from './types/permissions.js'
 import { ListDirTool } from './tools/ListDirTool.js'
 import { FileReadTool } from './tools/FileReadTool.js'
 import { FileWriteTool } from './tools/FileWriteTool.js'
@@ -8,6 +9,8 @@ import { GlobTool } from './tools/GlobTool.js'
 import { GrepTool } from './tools/GrepTool.js'
 import { BashTool } from './tools/BashTool.js'
 import { PowerShellTool } from './tools/PowerShellTool.js'
+import { TodoWriteTool } from './tools/TodoWriteTool.js'
+import { ExitPlanModeTool } from './tools/ExitPlanModeTool.js'
 
 /**
  * The tool registry.
@@ -27,9 +30,9 @@ import { PowerShellTool } from './tools/PowerShellTool.js'
  * 这个类型断言是把不同 zod schema 的工具装进同一数组的代价。
  * 每个工具内部仍完全有类型，泛化的只是注册表。
  */
-// 本函数：返回当前可用的全部工具实例，供代理循环与 REPL 使用。
-export function getAllTools(): Tool[] {
-  return [
+// 本函数：返回当前模式下可用的全部工具实例，供代理循环与 REPL 使用。
+export function getAllTools(mode: PermissionMode = 'default'): Tool[] {
+  const tools = [
     FileReadTool,
     FileWriteTool,
     FileEditTool,
@@ -38,5 +41,11 @@ export function getAllTools(): Tool[] {
     BashTool,
     PowerShellTool,
     ListDirTool,
+    TodoWriteTool,
   ] as unknown as Tool[]
+
+  // ExitPlanMode only exists in plan mode. Advertising it otherwise invites
+  // the model to call it for no reason.
+  // ExitPlanMode 只在 plan 模式下存在；否则暴露它只会诱使模型无端调用。
+  return mode === 'plan' ? [...tools, ExitPlanModeTool as unknown as Tool] : tools
 }

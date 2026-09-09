@@ -223,9 +223,10 @@ export function evaluatePermission(tool: Tool, input: unknown, ctx: ToolContext)
 
   const readOnly = tool.isReadOnly?.(input) ?? false
 
-  // 4. Plan mode: absolutely nothing mutates.
-  // 4. plan 模式：绝不允许任何改动。
-  if (context.mode === 'plan' && !readOnly) {
+  // 4. Plan mode: nothing mutates — except the one tool whose whole job is to
+  //    ask permission to leave plan mode.
+  // 4. plan 模式：不许有任何改动——唯一例外是那个专门用来请求退出 plan 模式的工具。
+  if (context.mode === 'plan' && !readOnly && tool.name !== 'ExitPlanMode') {
     return {
       behavior: 'deny',
       message:

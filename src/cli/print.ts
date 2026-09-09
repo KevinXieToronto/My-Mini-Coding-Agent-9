@@ -6,6 +6,7 @@ import type { Message } from '../types/message.js'
 import { query } from '../query.js'
 import { getAllTools } from '../tools.js'
 import { FileHistory } from '../utils/fileHistory.js'
+import { createAppState } from '../state/appState.js'
 
 // 本函数：以非交互方式跑一个回合，把流式文本直接写到 stdout。
 /**
@@ -43,7 +44,7 @@ export async function runPrintMode(
   const iterator = query({
     messages,
     settings,
-    tools: getAllTools(),
+    tools: getAllTools(permissions.mode),
     toolContext: {
       cwd: process.cwd(),
       abortController,
@@ -52,6 +53,7 @@ export async function runPrintMode(
       permissions,
       fileHistory: new FileHistory(),
       messageIndex: () => messages.length,
+      appState: createAppState(),
     },
     // No TTY means no human means no approval.
     // 没有 TTY 就没有人，也就没有批准。

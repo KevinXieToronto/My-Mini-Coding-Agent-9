@@ -8,10 +8,12 @@ import type { Tool, ToolContext } from '../Tool.js'
 import type { Usage } from '../services/api/stream.js'
 import { query, type CanUseTool, type Terminal } from '../query.js'
 import { getAllTools } from '../tools.js'
+import { TodoPanel } from '../components/TodoPanel.js'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
 import { buildSessionContext, expandUserMentions } from '../context.js'
 import { buildPermissionContext } from '../utils/config.js'
 import { FileHistory } from '../utils/fileHistory.js'
+import { createAppState } from '../state/appState.js'
 import {
   SessionWriter,
   messagesFromTranscript,
@@ -64,7 +66,6 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
   // 循环读 ref（同步）；React 读 state（批量）。
   const messagesRef = useRef<Message[]>([])
   const abortRef = useRef<AbortController | undefined>(undefined)
-  const toolsRef = useLazyRef<Tool[]>(getAllTools)
   // Checkpoints and the transcript writer are session-scoped, like the tool list.
   // 检查点与会话记录写入器和工具列表一样，都是会话级的。
   const fileHistoryRef = useRef(new FileHistory())
@@ -79,8 +80,13 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
     permissions: buildPermissionContext(settings, process.cwd()),
     fileHistory: fileHistoryRef.current,
     messageIndex: () => messagesRef.current.length,
+    appState: createAppState(),
   })
   const permissionContext = sessionRef.current.permissions
+  // Built after the permission context, because the advertised tool list is
+  // mode-dependent: ExitPlanMode only exists in plan mode.
+  // 放在权限上下文之后构建：对外暴露的工具表与模式相关——ExitPlanMode 仅存在于 plan 模式。
+  const toolsRef = useLazyRef<Tool[]>(() => getAllTools(permissionContext.mode))
   // Built once: git status and MINI.md are session-scoped, and rebuilding them
   // every turn would break the provider's prompt cache for no real benefit.
   // 只构建一次：git 状态与 MINI.md 属于会话级信息，逐回合重建只会白白打断服务商的提示词缓存。
@@ -252,6 +258,11 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
       {entries.map((entry, index) => (
         <EntryView key={index} entry={entry} width={width} />
       ))}
+
+      <TodoPanel
+        todos={sessionRef.current.appState.todos.main ?? []}
+        version={entries.length}
+      />
 
       {streamingText ? (
         <Box marginTop={1}>

@@ -67,6 +67,11 @@ export type PermissionContext = {
    */
   additionalDirectories: string[]
   cwd: string
+  /**
+   * The mode to restore when ExitPlanMode is approved.
+   * plan 模式获批退出时要恢复的模式。
+   */
+  prePlanMode?: PermissionMode
 }
 
 /**

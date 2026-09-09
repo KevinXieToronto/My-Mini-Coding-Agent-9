@@ -2,6 +2,7 @@
 import type { ToolContext } from '../src/Tool.js'
 import type { PermissionMode, PermissionRule } from '../src/types/permissions.js'
 import { FileHistory } from '../src/utils/fileHistory.js'
+import { createAppState } from '../src/state/appState.js'
 import { parseRules } from '../src/utils/permissions.js'
 
 /**
@@ -39,5 +40,6 @@ export function makeContext(
     },
     fileHistory: new FileHistory(),
     messageIndex: () => options.messageIndex ?? 0,
+    appState: createAppState(),
   }
 }

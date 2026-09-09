@@ -2,6 +2,7 @@
 import type OpenAI from 'openai'
 import type { PermissionContext } from './types/permissions.js'
 import type { FileHistory } from './utils/fileHistory.js'
+import type { AppState } from './state/appState.js'
 import type { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 
@@ -159,6 +160,18 @@ export type ToolContext = {
    * 当前在消息列表中的位置，用于检查点记账。
    */
   messageIndex: () => number
+  /**
+   * Session state that is not conversation — the todo list, for one. Shared by
+   * reference, so a tool writing to it is immediately visible to the UI.
+   * 非对话的会话状态（如待办清单）。按引用共享，工具写入后 UI 立即可见。
+   */
+  appState: AppState
+  /**
+   * Which agent this context belongs to. Undefined means the main loop; a
+   * sub-agent (Ch.14) gets its own id and therefore its own todo list.
+   * 本上下文属于哪个 agent。未定义即主循环；子代理（第 14 章）有自己的 id，也就有自己的待办清单。
+   */
+  agentId?: string
 }
 
 /**
