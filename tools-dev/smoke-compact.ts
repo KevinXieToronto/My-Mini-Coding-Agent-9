@@ -15,7 +15,12 @@ import {
   estimateConversationTokens,
   tokenState,
 } from '../src/utils/tokens.js'
-import { compactConversation, snipOldToolResults } from '../src/services/compact/compact.js'
+import {
+  compactConversation,
+  headWithinBudget,
+  snipOldToolResults,
+  summaryBudget,
+} from '../src/services/compact/compact.js'
 import { loadSettings } from '../src/utils/config.js'
 
 console.log('--- context windows ---')
@@ -77,6 +82,17 @@ for (let turn = 0; turn < 12; turn++) {
   prose.push({ role: 'assistant', content: `here is a long explanation of topic ${turn}. `.repeat(60) })
 }
 console.log('  before  : ~' + estimateConversationTokens(prose), 'tokens,', prose.length, 'messages')
+
+// The summary REQUEST must itself fit the window — overflowing here is how
+// compaction used to turn a full context into a 400.
+// 摘要请求本身也必须装得下窗口——当年正是这里溢出，把「上下文满了」变成一个 400。
+const budget = summaryBudget(settings.model)
+const sendable = headWithinBudget(prose.slice(0, prose.length - 6), budget)
+console.log(
+  `  head    : ~${estimateConversationTokens(prose.slice(0, prose.length - 6))} tokens ->`,
+  `~${estimateConversationTokens(sendable)} sent (budget ${budget}, window ${contextWindowFor(settings.model)})`,
+)
+console.log('  request fits the window:', estimateConversationTokens(sendable) < contextWindowFor(settings.model))
 const summarised = await compactConversation(prose, settings)
 console.log('  method  :', summarised.method)
 console.log('  after   : ~' + summarised.tokensAfter, 'tokens,', summarised.messages.length, 'messages')

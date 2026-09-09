@@ -3,7 +3,7 @@ import type { Settings } from '../../utils/config.js'
 import type { Message } from '../../types/message.js'
 import { toApiMessages } from '../../types/message.js'
 import { streamAssistantTurn } from '../api/stream.js'
-import { estimateMessageTokens } from '../../utils/tokens.js'
+import { contextWindowFor, estimateMessageTokens, estimateTokens } from '../../utils/tokens.js'
 
 /**
  * Context compaction.
@@ -41,6 +41,13 @@ const KEEP_TAIL = 6
 /** 超过此长度的工具结果优先被裁剪。 */
 const SNIP_THRESHOLD_CHARS = 2_000
 const SNIP_KEEP_CHARS = 400
+/**
+ * Room left for the summary the model is about to write, plus slack for our
+ * estimator being a few percent low.
+ * 给模型即将写出的摘要留的余量，外加估算偏低几个百分点的富余。
+ */
+const SUMMARY_OUTPUT_TOKENS = 2_000
+const ESTIMATE_SLACK = 0.9
 
 export type CompactResult = {
   messages: Message[]
@@ -128,13 +135,30 @@ export async function compactConversation(
     return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'none' }
   }
 
+  // The summary REQUEST has to fit the window too. Overflowing while trying to
+  // recover from an overflow is the failure this whole file exists to prevent,
+  // so we trim the head to a budget before sending it.
+  // 摘要请求本身也必须装得下窗口。为了从溢出中恢复反而再次溢出，正是本文件要防的事，
+  // 因此发送前先把 head 裁到预算之内。
+  const sendable = headWithinBudget(head, summaryBudget(settings.model))
+  if (sendable.length === 0) {
+    return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'snip' }
+  }
+
   let summary = ''
-  for await (const event of streamAssistantTurn({
-    messages: [...toApiMessages(head), { role: 'user', content: SUMMARY_PROMPT }],
-    settings,
-    signal,
-  })) {
-    if (event.type === 'done') summary = event.text
+  try {
+    for await (const event of streamAssistantTurn({
+      messages: [...toApiMessages(sendable), { role: 'user', content: SUMMARY_PROMPT }],
+      settings,
+      signal,
+    })) {
+      if (event.type === 'done') summary = event.text
+    }
+  } catch {
+    // Swallowed on purpose. Compaction runs INSIDE the agent loop, so a throw
+    // here would end a turn that was merely short of room.
+    // 有意吞掉异常：压缩发生在代理循环内部，此处抛出会让一个只是空间不足的回合直接终止。
+    summary = ''
   }
 
   if (!summary.trim()) {
@@ -159,6 +183,40 @@ export async function compactConversation(
     method: 'summary',
     summary,
   }
+}
+
+/**
+ * How many tokens of history the summary request may carry.
+ * 摘要请求可携带的历史 token 上限。
+ */
+// 本函数：按模型窗口减去提示词与摘要输出的余量，算出摘要请求的历史预算。
+export function summaryBudget(model: string): number {
+  const window = contextWindowFor(model)
+  return Math.max(
+    1_000,
+    Math.floor((window - SUMMARY_OUTPUT_TOKENS - estimateTokens(SUMMARY_PROMPT)) * ESTIMATE_SLACK),
+  )
+}
+
+/**
+ * Take as much of the head as fits, counting back from the most recent.
+ * The oldest messages are the ones we can most afford to lose: anything
+ * dropped here was already the least relevant part of the conversation, and a
+ * summary of the recent past beats a 400 for the whole of it.
+ * 从最近的一端往回取，取到预算为止。最旧的消息最舍得丢：被丢掉的本就是会话中
+ * 最不相关的部分，而「近期历史的摘要」总好过「整段历史换来一个 400」。
+ */
+// 本函数：在 token 预算内，从 head 末尾往前截取尽可能多的消息，并保证工具调用配对完整。
+export function headWithinBudget(head: Message[], budget: number): Message[] {
+  let used = 0
+  let start = head.length
+  for (let index = head.length - 1; index >= 0; index--) {
+    const cost = estimateMessageTokens(head[index]!)
+    if (used + cost > budget) break
+    used += cost
+    start = index
+  }
+  return ensureToolPairsIntact(head.slice(start))
 }
 
 /**
