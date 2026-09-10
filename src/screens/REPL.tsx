@@ -21,13 +21,15 @@ import {
   type SessionSummary,
 } from '../utils/sessionStorage.js'
 import { getSystemPrompt } from '../constants/prompts.js'
-import { CostTracker, tokenState } from '../utils/tokens.js'
-import { compactConversation } from '../services/compact/compact.js'
+import { CostTracker } from '../utils/tokens.js'
 import { Markdown } from '../components/Markdown.js'
 import { ToolCard, type ToolCardProps } from '../components/ToolCard.js'
 import { PermissionModal, type PermissionRequest } from '../components/PermissionModal.js'
 import { Spinner } from '../components/Spinner.js'
 import { PromptInput } from '../components/PromptInput.js'
+import { findCommand, getCommands, parseCommandLine } from '../commands.js'
+import { makeCostCommand, makeRewindCommand } from '../commands/builtins.js'
+import type { Command, CommandContext } from '../types/command.js'
 
 /**
  * One entry in the visible transcript. This is NOT the same thing as a
@@ -97,6 +99,15 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
     getSystemPrompt(toolsRef.current, buildSessionContext(process.cwd())),
   )
 
+  // Built once, at mount: scanning the command directories on every render
+  // would stat the filesystem for every streamed token.
+  // 只在挂载时构建一次：每次渲染都扫描命令目录，等于每个流式 token 都要访问文件系统。
+  const commandsRef = useLazyRef<Command[]>(() => [
+    ...getCommands(process.cwd()),
+    makeCostCommand(costRef.current),
+    makeRewindCommand(fileHistoryRef.current),
+  ])
+
   // Replay a resumed transcript into the UI, once.
   // 恢复的会话记录只回放一次到界面上。
   const [restored, setRestored] = useState(false)
@@ -139,64 +150,62 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
 
   const submit = useCallback(
     async (text: string) => {
-      if (text === '/exit' || text === '/quit') {
-        exit()
-        return
-      }
-      if (text === '/clear') {
-        messagesRef.current = []
-        setEntries([])
-        return
-      }
-      if (text === '/context' || text === '/cost') {
-        setEntries(previous => [
-          ...previous,
-          {
-            kind: 'notice',
-            text: statusReport(
-              text,
-              messagesRef.current,
-              systemPromptRef.current,
-              settings.model,
-              costRef.current,
-            ),
-          },
-        ])
-        return
-      }
-      if (text === '/compact') {
-        setBusy(true)
-        try {
-          const result = await compactConversation(messagesRef.current, settings)
-          messagesRef.current.splice(0, messagesRef.current.length, ...result.messages)
-          setEntries([
-            ...entriesFromMessages(messagesRef.current),
-            {
-              kind: 'notice',
-              text: `[compacted via ${result.method}: ~${result.tokensBefore} -> ~${result.tokensAfter} tokens]`,
-            },
+      // Slash commands are dispatched through the registry (Ch.13), not
+      // matched inline. A 'prompt' command rewrites `text` and falls through
+      // to the normal path; a 'local' command handles itself and returns.
+      // 斜杠命令交由注册表分发（第 13 章），不再逐条 if 匹配：
+      // 'prompt' 命令改写 `text` 后走正常路径，'local' 命令自行处理并返回。
+      let effectiveText = text
+      const parsed = parseCommandLine(text)
+      if (parsed) {
+        const command = findCommand(commandsRef.current, parsed.name)
+        if (!command) {
+          setEntries(previous => [
+            ...previous,
+            { kind: 'user', text },
+            { kind: 'notice', text: `Unknown command /${parsed.name}. Try /help.` },
           ])
-        } finally {
-          setBusy(false)
+          return
         }
-        return
-      }
-      if (text.startsWith('/rewind')) {
-        const turns = Number(text.split(/\s+/)[1] ?? '1')
-        const target = rewindTarget(messagesRef.current, Number.isFinite(turns) ? turns : 1)
-        const files = fileHistoryRef.current.rewindTo(target)
-        messagesRef.current = messagesRef.current.slice(0, target)
-        setEntries([
-          ...entriesFromMessages(messagesRef.current),
-          {
-            kind: 'notice',
-            text:
-              `[rewound to message ${target}` +
-              (files.length ? `; restored ${files.length} file(s)` : '') +
-              ']',
+
+        const commandContext: CommandContext = {
+          settings,
+          cwd: sessionRef.current.cwd,
+          messages: messagesRef.current,
+          systemPrompt: systemPromptRef.current,
+          appState: sessionRef.current.appState,
+          setMessages: next => {
+            messagesRef.current.splice(0, messagesRef.current.length, ...next)
+            setEntries(entriesFromMessages(messagesRef.current))
           },
-        ])
-        return
+          notify: notice => setEntries(previous => [...previous, { kind: 'notice', text: notice }]),
+        }
+
+        if (command.type === 'local') {
+          setEntries(previous => [...previous, { kind: 'user', text }])
+          setBusy(true)
+          try {
+            const result = await command.call(parsed.args, commandContext)
+            if (result.type === 'exit') {
+              exit()
+              return
+            }
+            if (result.type === 'text') commandContext.notify(result.text)
+          } catch (error) {
+            commandContext.notify(`/${parsed.name} failed: ${String(error)}`)
+          } finally {
+            // The permission engine reads its own context, not Settings, so a
+            // /mode change has to be mirrored across for it to take effect.
+            // 权限引擎读的是自己的上下文而非 Settings，/mode 的改动需同步过去才生效。
+            sessionRef.current.permissions.mode = settings.permissionMode
+            setBusy(false)
+          }
+          return
+        }
+
+        // A prompt command expands into what the user "said".
+        // 提示词命令展开成用户「说过的话」。
+        effectiveText = await command.getPrompt(parsed.args, commandContext)
       }
 
       setEntries(previous => [...previous, { kind: 'user', text }])
@@ -205,7 +214,7 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
       // @path 提及只为模型展开；转录里仍显示用户实际输入的文本。
       const userMessage: Message = {
         role: 'user',
-        content: expandUserMentions(text, sessionRef.current.cwd),
+        content: expandUserMentions(effectiveText, sessionRef.current.cwd),
       }
       messagesRef.current.push(userMessage)
       writerRef.current.append(userMessage)
@@ -279,35 +288,6 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
   )
 }
 
-/** `/context` and `/cost` both render from the same numbers. */
-/** `/context` 与 `/cost` 渲染的是同一组数字。 */
-// 本函数：把当前 token 用量或累计花费渲染成一段可读的状态文本。
-function statusReport(
-  command: string,
-  messages: Message[],
-  systemPrompt: string,
-  model: string,
-  cost: CostTracker,
-): string {
-  const state = tokenState(messages, systemPrompt, model)
-  if (command === '/cost') {
-    const dollars = cost.estimateCost(model)
-    return [
-      `requests:  ${cost.requests}`,
-      `input:     ${cost.promptTokens.toLocaleString()} tokens`,
-      `output:    ${cost.completionTokens.toLocaleString()} tokens`,
-      `cost:      ${dollars === undefined ? 'unknown (no pricing for this model)' : `$${dollars.toFixed(4)}`}`,
-    ].join('\n')
-  }
-  const bar = '='.repeat(Math.round(state.percentUsed / 5)).padEnd(20, '.')
-  return [
-    `context:   [${bar}] ${state.percentUsed}%`,
-    `estimated: ~${state.used.toLocaleString()} / ${state.window.toLocaleString()} tokens`,
-    `compact at:~${state.threshold.toLocaleString()} tokens`,
-    `messages:  ${messages.length}`,
-  ].join('\n')
-}
-
 /**
  * Loud colour for a mode that has removed a guard rail.
  * 护栏被拿掉的模式要用显眼的颜色。
@@ -377,22 +357,6 @@ function entriesFromMessages(messages: Message[]): Entry[] {
     }
   }
   return entries
-}
-
-/**
- * Index to truncate to, counting back `turns` USER messages.
- * We rewind to before a user message, because that is the unit a human thinks
- * in — "undo what you did after I asked for X".
- * 往回数 `turns` 条用户消息得到截断下标。回退到某条用户消息之前，
- * 因为这才是人类思考的单位——「把我说了 X 之后你做的都撤掉」。
- */
-// 本函数：计算回退目标下标，按用户消息倒数 turns 条。
-function rewindTarget(messages: Message[], turns: number): number {
-  const userIndexes = messages
-    .map((message, index) => (message.role === 'user' ? index : -1))
-    .filter(index => index >= 0)
-  const target = userIndexes[userIndexes.length - turns]
-  return target ?? 0
 }
 
 // 本函数：把非正常结束的回合终态翻译成一行人类可读提示。
