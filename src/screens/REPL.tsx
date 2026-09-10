@@ -47,14 +47,27 @@ type Entry =
   | { kind: 'tool'; id: string; card: ToolCardProps }
   | { kind: 'notice'; text: string }
 
-export type REPLProps = { settings: Settings; resume?: SessionSummary }
+/**
+ * What main.ts hands over after connecting the MCP servers: the wrapped tools,
+ * the servers' own instructions, and one line per server that did not connect.
+ * main.ts 连接 MCP 服务器后交过来的东西：包装好的工具、服务器自带的说明，
+ * 以及每台未连上的服务器一行的失败信息。
+ */
+export type McpBundle = { tools: Tool[]; instructions: string; failures: string[] }
+
+export type REPLProps = { settings: Settings; resume?: SessionSummary; mcp?: McpBundle }
 
 // 本组件：REPL 主屏，持有会话状态、转录列表、授权弹窗与输入框，并负责会话记录与回退。
-export function REPL({ settings, resume }: REPLProps): React.ReactElement {
+export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
   const { exit } = useApp()
   const { stdout } = useStdout()
 
-  const [entries, setEntries] = useState<Entry[]>([])
+  // Seeded with the MCP failures, so a server that did not connect says so in
+  // the transcript instead of silently not being there.
+  // 以 MCP 失败信息作为初值：连不上的服务器会在转录里说明自己，而不是无声无息地消失。
+  const [entries, setEntries] = useState<Entry[]>(
+    (mcp?.failures ?? []).map(text => ({ kind: 'notice' as const, text })),
+  )
   /**
    * Streaming text lives in its OWN state, not appended to `entries`.
    * Every token would otherwise clone the whole transcript array — this is the
@@ -102,7 +115,7 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
   // 与命令一样只扫描一次：Skill 工具闭包持有该列表，提示词的技能区块也源自同一次扫描。
   const skillsRef = useLazyRef(() => loadSkills(process.cwd()))
   const toolsRef = useLazyRef<Tool[]>(() =>
-    getToolsWithAgent(settings, permissionContext.mode, skillsRef.current),
+    getToolsWithAgent(settings, permissionContext.mode, skillsRef.current, mcp?.tools ?? []),
   )
   // Built once: git status and MINI.md are session-scoped, and rebuilding them
   // every turn would break the provider's prompt cache for no real benefit.
@@ -111,7 +124,7 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
   // It has to go through useLazyRef to actually be built once — see the note there.
   // 必须经由 useLazyRef 才真的只构建一次——原因见该函数处的说明。
   const systemPromptRef = useLazyRef(() =>
-    getSystemPrompt(toolsRef.current, buildSessionContext(process.cwd())),
+    getSystemPrompt(toolsRef.current, buildSessionContext(process.cwd(), mcp?.instructions)),
   )
 
   // Built once, at mount: scanning the command directories on every render

@@ -83,16 +83,36 @@ export function getToolsWithAgent(
   settings: Settings,
   mode: PermissionMode = 'default',
   skills: Skill[] = [],
+  mcpTools: Tool[] = [],
 ): Tool[] {
   // Skill is built here for the same reason Agent is: it needs the session's
   // skill list, which the registry has no way to discover on its own.
   // Skill 与 Agent 同理在此构造：它需要本会话的技能列表，而注册表自己无从得知。
-  const base = [...getAllTools(mode), createSkillTool(() => skills) as unknown as Tool]
+  //
+  // MCP tools go in a separate partition AFTER the built-ins, and each
+  // partition stays sorted. Keeping the built-ins a stable contiguous prefix
+  // is what lets a provider's prompt cache survive a server connecting or
+  // disconnecting mid-session. cf. assembleToolPool in src/tools.ts.
+  // MCP 工具作为单独分区排在内置工具之后，各分区各自有序。
+  // 内置工具保持为稳定连续的前缀，服务商的提示词缓存才能在会话中途有服务器连上或断开时存活。
+  // 参见 src/tools.ts 的 assembleToolPool。
+  const base = [
+    ...getAllTools(mode),
+    createSkillTool(() => skills) as unknown as Tool,
+    ...[...mcpTools].sort((a, b) => a.name.localeCompare(b.name)),
+  ]
   const agent = createAgentTool({
     // Sub-agents get skills too — that is how a skill can say "delegate the
     // wide search to a sub-agent" and have it work.
     // 子代理同样拿得到技能——技能里写「把大范围搜索交给子代理」才真的行得通。
-    getTools: () => [...getSubagentTools(mode), createSkillTool(() => skills) as unknown as Tool],
+    // A sub-agent draws from the same MCP pool: a server connected for this
+    // session is a capability of the session, not of one loop in it.
+    // 子代理取用同一个 MCP 池：本会话连上的服务器属于整个会话的能力，而非其中某个循环的。
+    getTools: () => [
+      ...getSubagentTools(mode),
+      createSkillTool(() => skills) as unknown as Tool,
+      ...[...mcpTools].sort((a, b) => a.name.localeCompare(b.name)),
+    ],
     async runNestedQuery({ messages, tools, systemPrompt, ctx, maxTurns }) {
       const { query } = await import('./query.js')
       const iterator = query({

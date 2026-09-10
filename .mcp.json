@@ -1,0 +1,6 @@
+{
+  "mcpServers": {
+    "demo": { "command": "node", "args": ["tools-dev/demo-mcp-server.mjs"] },
+    "broken": { "command": "node", "args": ["tools-dev/does-not-exist.mjs"] }
+  }
+}

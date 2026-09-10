@@ -160,6 +160,11 @@ export type SessionContext = {
   today: string
   gitStatus?: string
   skillsSection?: string
+  /**
+   * Instructions the connected MCP servers shipped, already rendered.
+   * 已连接 MCP 服务器自带的说明，已渲染成文。
+   */
+  mcpInstructions?: string
   projectInstructions?: string
 }
 
@@ -171,7 +176,7 @@ export type SessionContext = {
  * 每会话构建一次。git 状态与 MINI.md 在工作中确会变化，但逐回合重读会打断提示词缓存，
  * 收益甚微——何况代理随时可以自己跑 `git status`。
  */
-export function buildSessionContext(cwd: string): SessionContext {
+export function buildSessionContext(cwd: string, mcpInstructions?: string): SessionContext {
   return {
     cwd,
     platform: `${platform()} ${release()}`,
@@ -181,6 +186,10 @@ export function buildSessionContext(cwd: string): SessionContext {
     // advertised — a conditional one costs nothing until it becomes relevant.
     // 此刻尚未触及任何文件，故只公布无条件技能——条件技能在变得相关前不花一分钱。
     skillsSection: renderSkillsSection(visibleSkills(loadSkills(cwd), [])),
+    // Passed in rather than loaded here: connecting to a server is async and
+    // happens before the UI mounts, while this function is synchronous.
+    // 由外部传入而非在此加载：连接服务器是异步的、发生在 UI 挂载之前，而本函数是同步的。
+    mcpInstructions: mcpInstructions?.trim() ? mcpInstructions : undefined,
     projectInstructions: loadProjectInstructions(cwd),
   }
 }

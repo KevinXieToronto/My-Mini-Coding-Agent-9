@@ -90,9 +90,34 @@ export async function runCli(opts: CliOptions): Promise<void> {
   // rather than crashing with "Raw mode is not supported".
   // Ink 需要真实终端才能把 stdin 切到 raw 模式。没有终端（管道、CI、`-p`）时
   // 走非交互路径，而不是抛「Raw mode is not supported」。
+  // Connect MCP servers before the UI mounts, so their tools are in the very
+  // first request rather than appearing a turn later.
+  // 在 UI 挂载前连接 MCP 服务器，让其工具出现在第一次请求里，而不是晚一个回合才冒出来。
+  const { connectAll, disconnectAll, renderMcpInstructions } = await import(
+    './services/mcp/client.js'
+  )
+  const { loadMcpConfig } = await import('./services/mcp/config.js')
+  const connections = await connectAll(loadMcpConfig(process.cwd()))
+  const mcp = {
+    tools: connections.flatMap(connection => connection.tools),
+    instructions: renderMcpInstructions(connections),
+    failures: connections
+      .filter(connection => connection.error)
+      .map(connection => `[mcp] ${connection.name} unavailable: ${connection.error}`),
+  }
+
+  // Print mode gets the servers too. A capability that only exists when a
+  // human is watching is not a capability a script can rely on — the same
+  // argument as for hooks in Ch.16.
+  // print 模式同样吃这些服务器：只在有人盯着时才存在的能力，脚本无法依赖——
+  // 与第 16 章为钩子所持的理由相同。
   if (opts.print !== undefined || !process.stdin.isTTY) {
     const { runPrintMode } = await import('./cli/print.js')
-    await runPrintMode(settings, permissionContext, opts.print)
+    try {
+      await runPrintMode(settings, permissionContext, opts.print, mcp)
+    } finally {
+      await disconnectAll(connections)
+    }
     return
   }
 
@@ -101,8 +126,12 @@ export async function runCli(opts: CliOptions): Promise<void> {
     import('react'),
     import('./screens/REPL.js'),
   ])
-  const instance = render(createElement(REPL, { settings, resume }))
+  const instance = render(createElement(REPL, { settings, resume, mcp }))
   await instance.waitUntilExit()
+  // A stdio server is a child process. Skip this and every session leaves an
+  // orphan behind.
+  // stdio 服务器是子进程。跳过这一步，每次会话都会留下孤儿进程。
+  await disconnectAll(connections)
 }
 
 /**

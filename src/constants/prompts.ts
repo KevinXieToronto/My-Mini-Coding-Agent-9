@@ -62,6 +62,11 @@ export type DynamicContext = {
    * 技能区块：只含名称与描述，绝不含正文。
    */
   skillsSection?: string
+  /**
+   * The MCP servers' own instructions, if any connected server shipped some.
+   * 已连接 MCP 服务器自带的说明（若有）。
+   */
+  mcpInstructions?: string
   projectInstructions?: string
 }
 
@@ -85,6 +90,13 @@ Today: ${context.today}`,
   // 技能排在项目指令之前，让 MINI.md 拥有最终话语权：项目文件里的规则仍可覆盖技能所述。
   if (context.skillsSection) {
     blocks.push(context.skillsSection)
+  }
+
+  // MCP instructions sit between the skills and MINI.md: a third-party server
+  // gets to explain itself, but the project file still has the last word.
+  // MCP 说明夹在技能与 MINI.md 之间：第三方服务器可以自我说明，但项目文件仍有最终话语权。
+  if (context.mcpInstructions) {
+    blocks.push(context.mcpInstructions)
   }
 
   if (context.projectInstructions) {

@@ -47,6 +47,16 @@ export type Tool<Schema extends z.ZodType = z.ZodType> = {
    * zod 是唯一事实来源；模型看到的 JSON Schema 由它派生。
    */
   inputSchema: Schema
+  /**
+   * Use this JSON Schema instead of deriving one from `inputSchema`.
+   * MCP tools (Ch.17) arrive as raw JSON Schema and have no zod definition.
+   * 直接用这份 JSON Schema，不再从 `inputSchema` 派生。
+   * MCP 工具（第 17 章）带来的是原始 JSON Schema，没有 zod 定义。
+   *
+   * cf. `inputJSONSchema` on Tool in the Claude Code tree.
+   * 参见 Claude Code 中 Tool 上的 `inputJSONSchema`。
+   */
+  jsonSchemaOverride?: Record<string, unknown>
 
   // --- semantics ---------------------------------------------------------
   // --- 语义 ---
@@ -218,10 +228,15 @@ export function toApiTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletio
     function: {
       name: tool.name,
       description: tool.description,
-      parameters: zodToJsonSchema(tool.inputSchema, {
-        $refStrategy: 'none',
-        target: 'openAi',
-      }) as Record<string, unknown>,
+      // An MCP tool has no zod schema to derive from, so it hands us the
+      // provider-facing schema directly.
+      // MCP 工具没有可派生的 zod schema，故直接交给我们面向服务商的 schema。
+      parameters:
+        tool.jsonSchemaOverride ??
+        (zodToJsonSchema(tool.inputSchema, {
+          $refStrategy: 'none',
+          target: 'openAi',
+        }) as Record<string, unknown>),
     },
   }))
 }

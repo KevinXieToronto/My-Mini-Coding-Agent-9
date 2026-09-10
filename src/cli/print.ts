@@ -10,6 +10,7 @@ import { loadSkills } from '../skills/loadSkills.js'
 import { FileHistory } from '../utils/fileHistory.js'
 import { createAppState } from '../state/appState.js'
 import { runContextHooks } from '../utils/hooks.js'
+import type { McpBundle } from '../screens/REPL.js'
 
 // 本函数：以非交互方式跑一个回合，把流式文本直接写到 stdout。
 /**
@@ -34,7 +35,14 @@ export async function runPrintMode(
   settings: Settings,
   permissions: PermissionContext,
   prompt?: string,
+  mcp?: McpBundle,
 ): Promise<void> {
+  // A server that did not connect goes to stderr, not stdout: stdout is the
+  // answer, and a script piping it should not have to filter our diagnostics.
+  // 连不上的服务器写到 stderr 而非 stdout：stdout 是答案本身，
+  // 下游脚本不该被迫从中过滤我们的诊断信息。
+  for (const failure of mcp?.failures ?? []) console.error(failure)
+
   const text = prompt ?? (await readAllStdin())
   if (!text.trim()) {
     stdout.write('No prompt given. Use -p "your prompt", or pipe text on stdin.\n')
@@ -89,7 +97,7 @@ ${submitted.additionalContext}
   const iterator = query({
     messages,
     settings,
-    tools: getToolsWithAgent(settings, permissions.mode, loadSkills(cwd)),
+    tools: getToolsWithAgent(settings, permissions.mode, loadSkills(cwd), mcp?.tools ?? []),
     toolContext: {
       cwd,
       abortController,
