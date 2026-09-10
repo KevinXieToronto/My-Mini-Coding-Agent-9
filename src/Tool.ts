@@ -1,6 +1,7 @@
 // 本文件：工具（能力）契约与相关类型，所有能力都实现这一个接口，并提供其构建与渲染辅助函数。
 import type OpenAI from 'openai'
 import type { PermissionContext } from './types/permissions.js'
+import type { HooksConfig } from './types/hooks.js'
 import type { FileHistory } from './utils/fileHistory.js'
 import type { AppState } from './state/appState.js'
 import type { z } from 'zod'
@@ -172,6 +173,17 @@ export type ToolContext = {
    * 本上下文属于哪个 agent。未定义即主循环；子代理（第 14 章）有自己的 id，也就有自己的待办清单。
    */
   agentId?: string
+  /**
+   * Lifecycle hooks from settings.json (Ch.16).
+   * 来自 settings.json 的生命周期钩子（第 16 章）。
+   */
+  hooks: HooksConfig
+  /**
+   * Identifies this session to the hooks, which run as separate processes and
+   * have no other way to tell one run from another.
+   * 向钩子标识本次会话——钩子是独立进程，没有别的办法区分不同的运行。
+   */
+  sessionId: string
 }
 
 /**

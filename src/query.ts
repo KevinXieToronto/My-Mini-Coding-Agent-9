@@ -8,6 +8,7 @@ import { toApiTools, type PermissionResult, type Tool, type ToolContext } from '
 import { evaluatePermission } from './utils/permissions.js'
 import { tokenState } from './utils/tokens.js'
 import { compactConversation } from './services/compact/compact.js'
+import { runContextHooks, runPreToolUseHooks, runStopHooks } from './utils/hooks.js'
 import {
   partitionToolCalls,
   runWithConcurrency,
@@ -113,6 +114,9 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
   const apiTools = toApiTools(tools)
 
   let turn = 0
+  // A Stop hook may re-open the turn, but only once — see below.
+  // Stop 钩子可以让回合重开，但只允许一次——见下文。
+  let stopHookFired = false
 
   while (true) {
     if (signal.aborted) return { reason: 'aborted', turns: turn }
@@ -195,6 +199,24 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
     // 注意判断依据是「是否存在工具调用」，而非 finish_reason：
     // 各家供应商对 finish_reason 的处理不一致，调用块才是事实依据。
     if (toolCalls.length === 0) {
+      // Stop hooks get the last word. One may decide the work is not actually
+      // finished — "the tests still fail" — and push the loop around again.
+      // This is a CONTINUE, not an error: the same principle as compaction.
+      // Stop 钩子有最终发言权：它可以判定活儿其实没干完（「测试还挂着」），
+      // 把循环再推一圈。这属于「继续」而非错误，与压缩同一条原则。
+      const stop = await runStopHooks(
+        toolContext.hooks,
+        { hook_event_name: 'Stop', session_id: toolContext.sessionId, cwd: toolContext.cwd },
+        toolContext.cwd,
+      )
+      if (stop.keepGoing && !stopHookFired) {
+        stopHookFired = true // once per turn, or a badly written hook loops forever
+        // 每回合只放行一次，否则写坏的钩子会让循环永不停歇
+        const nudge: Message = { role: 'user', content: `[Stop hook] ${stop.reason}` }
+        messages.push(nudge)
+        onMessage(nudge)
+        continue
+      }
       return { reason: 'completed', turns: turn }
     }
 
@@ -307,16 +329,44 @@ async function runOneTool(
       isError: true,
     }
   }
-  const input = parsed.data
 
-  const validation = tool.validateInput?.(input, ctx)
+  const validation = tool.validateInput?.(parsed.data, ctx)
   if (validation && !validation.ok) {
     return { result: `Error: ${validation.message}`, isError: true }
   }
 
+  // PreToolUse hooks run BEFORE the gate, and can deny outright or rewrite
+  // the input. A hook that denies wins over any allow rule — hooks subtract.
+  // PreToolUse 钩子在闸门之前运行，可直接拒绝、也可改写入参。
+  // 钩子的拒绝压过任何 allow 规则——钩子做的是减法。
+  let input = parsed.data
+  const pre = await runPreToolUseHooks(
+    ctx.hooks,
+    {
+      hook_event_name: 'PreToolUse',
+      session_id: ctx.sessionId,
+      cwd: ctx.cwd,
+      tool_name: tool.name,
+      tool_input: input,
+    },
+    ctx.cwd,
+  )
+  if (pre.decision === 'deny') {
+    return { result: `PermissionDenied: ${pre.reason ?? 'blocked by a hook'}`, isError: true }
+  }
+  if (pre.updatedInput) {
+    // Re-validate: a hook is not trusted to produce a well-formed input.
+    // 重新校验：钩子并不被信任能产出格式良好的入参。
+    const reparsed = tool.inputSchema.safeParse(pre.updatedInput)
+    if (reparsed.success) input = reparsed.data
+  }
+
   // THE GATE. Everything above this line was validation; this is authorisation.
   // 闸门。此线之上都是「校验」，这里才是「授权」。
-  const decision: PermissionResult = evaluatePermission(tool, input, ctx)
+  const decision: PermissionResult =
+    pre.decision === 'allow'
+      ? { behavior: 'allow' }
+      : evaluatePermission(tool, input, ctx)
   if (decision.behavior === 'deny') {
     return { result: `PermissionDenied: ${decision.message}`, isError: true }
   }
@@ -334,7 +384,35 @@ async function runOneTool(
 
   try {
     const output = await tool.execute(input, ctx)
-    return { result: output.result, isError: false }
+
+    // PostToolUse hooks cannot undo the call — it already happened — but they
+    // can append context. This is where a formatter or a linter runs.
+    // PostToolUse 钩子无法撤销这次调用（它已经发生了），但可以追加上下文。
+    // 格式化器、linter 就跑在这里。
+    const post = await runContextHooks(
+      ctx.hooks,
+      'PostToolUse',
+      {
+        hook_event_name: 'PostToolUse',
+        session_id: ctx.sessionId,
+        cwd: ctx.cwd,
+        tool_name: tool.name,
+        tool_input: input,
+        tool_response: output.result,
+      },
+      ctx.cwd,
+    )
+
+    return {
+      result: post.additionalContext
+        ? `${output.result}
+
+<hook-context>
+${post.additionalContext}
+</hook-context>`
+        : output.result,
+      isError: false,
+    }
   } catch (error) {
     return {
       result: `Error: ${error instanceof Error ? error.message : String(error)}`,

@@ -4,6 +4,8 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { CONFIG_DIR_NAME } from '../constants/product.js'
 import type { PermissionContext, PermissionMode } from '../types/permissions.js'
+import type { HookEvent, HookMatcher, HooksConfig } from '../types/hooks.js'
+import { HOOK_EVENTS } from '../types/hooks.js'
 import { parseRules } from './permissions.js'
 
 /**
@@ -28,6 +30,11 @@ export type Settings = {
    */
   permissions?: { allow?: string[]; deny?: string[]; ask?: string[] }
   additionalDirectories?: string[]
+  /**
+   * Lifecycle hooks, keyed by event. See src/types/hooks.ts.
+   * 生命周期钩子，按事件分组。参见 src/types/hooks.ts。
+   */
+  hooks?: HooksConfig
 }
 
 const DEFAULTS: Settings = {
@@ -89,7 +96,26 @@ export function loadSettings(cwd: string = process.cwd()): Settings {
       ...(user.additionalDirectories ?? []),
       ...(project.additionalDirectories ?? []),
     ],
+    hooks: mergeHooks(user.hooks, project.hooks),
   }
+}
+
+/**
+ * Hooks merge per event for the same reason permission rules do: a project
+ * file must be able to ADD a guard, never to quietly drop one the user set
+ * globally. Hooks subtract capability, so losing one is the dangerous
+ * direction.
+ * 钩子按事件合并，理由与权限规则相同：项目级配置可以「加」一道守卫，
+ * 却绝不能悄悄丢掉用户在全局设置的那道。钩子做减法，丢一个才是危险的方向。
+ */
+// 本函数：把用户级与项目级的钩子配置按事件逐项合并（用户级在前）。
+function mergeHooks(user?: HooksConfig, project?: HooksConfig): HooksConfig {
+  const merged: HooksConfig = {}
+  for (const event of HOOK_EVENTS) {
+    const entries: HookMatcher[] = [...(user?.[event] ?? []), ...(project?.[event] ?? [])]
+    if (entries.length) merged[event as HookEvent] = entries
+  }
+  return merged
 }
 
 /**

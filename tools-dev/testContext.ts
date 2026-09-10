@@ -4,6 +4,7 @@ import type { PermissionMode, PermissionRule } from '../src/types/permissions.js
 import { FileHistory } from '../src/utils/fileHistory.js'
 import { createAppState } from '../src/state/appState.js'
 import { parseRules } from '../src/utils/permissions.js'
+import type { HooksConfig } from '../src/types/hooks.js'
 
 /**
  * One place that knows how to build a ToolContext for a test.
@@ -23,6 +24,7 @@ export function makeContext(
     rules?: { allow?: string[]; deny?: string[]; ask?: string[] }
     additionalDirectories?: string[]
     messageIndex?: number
+    hooks?: HooksConfig
   } = {},
 ): ToolContext {
   const cwd = options.cwd ?? process.cwd()
@@ -41,5 +43,7 @@ export function makeContext(
     fileHistory: new FileHistory(),
     messageIndex: () => options.messageIndex ?? 0,
     appState: createAppState(),
+    hooks: options.hooks ?? {},
+    sessionId: 'test-session',
   }
 }

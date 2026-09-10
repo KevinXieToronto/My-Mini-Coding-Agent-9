@@ -1,5 +1,5 @@
 // 本文件：交互式 REPL 界面——整个应用的主屏，把代理循环的事件流接到 React 状态与各组件上。
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, Text, useApp, useInput, useStdout } from 'ink'
 import type React from 'react'
 import type { Settings } from '../utils/config.js'
@@ -15,6 +15,7 @@ import { buildSessionContext, expandUserMentions } from '../context.js'
 import { buildPermissionContext } from '../utils/config.js'
 import { FileHistory } from '../utils/fileHistory.js'
 import { createAppState } from '../state/appState.js'
+import { runContextHooks } from '../utils/hooks.js'
 import {
   SessionWriter,
   messagesFromTranscript,
@@ -84,6 +85,13 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
     fileHistory: fileHistoryRef.current,
     messageIndex: () => messagesRef.current.length,
     appState: createAppState(),
+    // Hooks are read once, with the rest of the settings: re-reading
+    // settings.json mid-session would let a file change what the user already
+    // consented to when they started this session.
+    // 钩子随设置一次读入：会话中途重读 settings.json，
+    // 等于让一个文件改掉用户启动会话时已经认可的东西。
+    hooks: settings.hooks ?? {},
+    sessionId: writerRef.current.sessionId,
   })
   const permissionContext = sessionRef.current.permissions
   // Built after the permission context, because the advertised tool list is
@@ -127,6 +135,39 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
     setEntries(entriesFromMessages(messagesRef.current))
     setRestored(true)
   }
+
+  /**
+   * SessionStart fires once, at mount. Its context becomes a real user message
+   * — `system-ui` would render nicely and never reach the model, which is the
+   * opposite of what a hook injecting context wants.
+   * SessionStart 在挂载时触发一次。它注入的上下文会变成一条真正的 user 消息——
+   * 用 `system-ui` 虽好看却永远到不了模型那里，与「注入上下文」的初衷正好相反。
+   */
+  useEffect(() => {
+    let cancelled = false
+    void runContextHooks(
+      sessionRef.current.hooks,
+      'SessionStart',
+      {
+        hook_event_name: 'SessionStart',
+        session_id: sessionRef.current.sessionId,
+        cwd: sessionRef.current.cwd,
+      },
+      sessionRef.current.cwd,
+    ).then(result => {
+      if (cancelled || !result.additionalContext) return
+      const message: Message = { role: 'user', content: result.additionalContext }
+      messagesRef.current.push(message)
+      writerRef.current.append(message)
+      setEntries(previous => [
+        ...previous,
+        { kind: 'notice', text: `[SessionStart hook] ${result.additionalContext}` },
+      ])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
@@ -216,12 +257,44 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
       }
 
       setEntries(previous => [...previous, { kind: 'user', text }])
+
+      // UserPromptSubmit is the one hook that sees the prompt before the model
+      // does. It runs AFTER command expansion, so a hook guards what is
+      // actually sent, not what was typed.
+      // UserPromptSubmit 是唯一能在模型之前看到提问的钩子。
+      // 它在命令展开之后运行，因此守的是「真正发出去的内容」，而非用户敲下的字面。
+      const submitted = await runContextHooks(
+        sessionRef.current.hooks,
+        'UserPromptSubmit',
+        {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: sessionRef.current.sessionId,
+          cwd: sessionRef.current.cwd,
+          prompt: effectiveText,
+        },
+        sessionRef.current.cwd,
+      )
+      if (submitted.blocked) {
+        setEntries(previous => [
+          ...previous,
+          { kind: 'notice', text: `Blocked by a hook: ${submitted.reason ?? 'no reason given'}` },
+        ])
+        return
+      }
+
       // @path mentions are expanded for the MODEL only; the transcript keeps
       // showing what the user actually typed.
       // @path 提及只为模型展开；转录里仍显示用户实际输入的文本。
+      const expanded = expandUserMentions(effectiveText, sessionRef.current.cwd)
       const userMessage: Message = {
         role: 'user',
-        content: expandUserMentions(effectiveText, sessionRef.current.cwd),
+        content: submitted.additionalContext
+          ? `${expanded}
+
+<hook-context>
+${submitted.additionalContext}
+</hook-context>`
+          : expanded,
       }
       messagesRef.current.push(userMessage)
       writerRef.current.append(userMessage)

@@ -1,4 +1,5 @@
 // 本文件：非交互（-p / 管道 / 无 TTY）模式：一次提问、纯文本输出、结束退出，权限默认全部拒绝。
+import { randomUUID } from 'node:crypto'
 import { stdin, stdout } from 'node:process'
 import type { Settings } from '../utils/config.js'
 import type { PermissionContext } from '../types/permissions.js'
@@ -8,6 +9,7 @@ import { getToolsWithAgent } from '../tools.js'
 import { loadSkills } from '../skills/loadSkills.js'
 import { FileHistory } from '../utils/fileHistory.js'
 import { createAppState } from '../state/appState.js'
+import { runContextHooks } from '../utils/hooks.js'
 
 // 本函数：以非交互方式跑一个回合，把流式文本直接写到 stdout。
 /**
@@ -39,15 +41,57 @@ export async function runPrintMode(
     return
   }
 
-  const messages: Message[] = [{ role: 'user', content: text.trim() }]
+  const cwd = process.cwd()
+  const hooks = settings.hooks ?? {}
+  const sessionId = randomUUID()
+
+  // SessionStart, then UserPromptSubmit — the same two injection points the
+  // REPL has. A script gets the project's hooks too, or a guard that only
+  // fires interactively is no guard at all.
+  // 先 SessionStart，再 UserPromptSubmit——与 REPL 相同的两个注入点。
+  // 脚本模式同样吃项目的钩子：只在交互时生效的守卫，等于没有守卫。
+  const messages: Message[] = []
+  const started = await runContextHooks(
+    hooks,
+    'SessionStart',
+    { hook_event_name: 'SessionStart', session_id: sessionId, cwd },
+    cwd,
+  )
+  if (started.additionalContext) {
+    messages.push({ role: 'user', content: started.additionalContext })
+  }
+
+  const submitted = await runContextHooks(
+    hooks,
+    'UserPromptSubmit',
+    { hook_event_name: 'UserPromptSubmit', session_id: sessionId, cwd, prompt: text.trim() },
+    cwd,
+  )
+  if (submitted.blocked) {
+    stdout.write(`[blocked by a hook] ${submitted.reason ?? 'no reason given'}
+`)
+    process.exitCode = 1
+    return
+  }
+  messages.push({
+    role: 'user',
+    content: submitted.additionalContext
+      ? `${text.trim()}
+
+<hook-context>
+${submitted.additionalContext}
+</hook-context>`
+      : text.trim(),
+  })
+
   const abortController = new AbortController()
 
   const iterator = query({
     messages,
     settings,
-    tools: getToolsWithAgent(settings, permissions.mode, loadSkills(process.cwd())),
+    tools: getToolsWithAgent(settings, permissions.mode, loadSkills(cwd)),
     toolContext: {
-      cwd: process.cwd(),
+      cwd,
       abortController,
       readFileState: new Map(),
       sessionAllow: new Set(),
@@ -55,6 +99,8 @@ export async function runPrintMode(
       fileHistory: new FileHistory(),
       messageIndex: () => messages.length,
       appState: createAppState(),
+      hooks,
+      sessionId,
     },
     // No TTY means no human means no approval.
     // 没有 TTY 就没有人，也就没有批准。

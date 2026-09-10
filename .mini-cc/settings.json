@@ -1,8 +1,16 @@
 {
-  "model": "gpt-5" ,
+  "model": "gpt-5",
   "permissionMode": "default",
   "permissions": {
     "deny": ["Bash(rm *)", "Edit(.env)"],
     "allow": ["Bash(npx tsc --noEmit)"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Edit|Write", "hooks": [{ "command": "node .mini-cc/hooks/guard-env.mjs" }] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write", "hooks": [{ "command": "node .mini-cc/hooks/note.mjs" }] }
+    ]
   }
 }
