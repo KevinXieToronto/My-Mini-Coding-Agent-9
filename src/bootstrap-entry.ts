@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // 本文件：CLI 最外层入口，记录启动时间后动态载入命令行入口。
 /**
  * The outermost entry point. Keep it tiny.

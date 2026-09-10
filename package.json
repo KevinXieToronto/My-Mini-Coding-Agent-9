@@ -4,10 +4,18 @@
   "private": true,
   "type": "module",
   "bin": {
-    "mini-cc": "./src/bootstrap-entry.ts"
+    "mini-cc": "./dist/mini-cc.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
     "dev": "tsx src/bootstrap-entry.ts",
+    "build": "node scripts/build.mjs",
+    "start": "node dist/mini-cc.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -31,6 +39,7 @@
     "@types/node": "^22.10.0",
     "@types/picomatch": "^4.0.3",
     "@types/react": "^18.3.12",
+    "esbuild": "^0.24.2",
     "ink-testing-library": "^4.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

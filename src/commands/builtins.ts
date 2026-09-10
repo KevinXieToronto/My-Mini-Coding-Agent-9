@@ -7,6 +7,7 @@ import { compactConversation } from '../services/compact/compact.js'
 import { listSessions } from '../utils/sessionStorage.js'
 import { saveUserSettings } from '../utils/config.js'
 import type { FileHistory } from '../utils/fileHistory.js'
+import { doctor } from './doctor.js'
 
 /**
  * `/help` lists the registry, which is built from this file — so importing
@@ -253,5 +254,5 @@ const exitCommand: Command = {
 }
 
 export const BUILTIN_COMMANDS: Command[] = [
-  help, clear, context, compact, model, mode, sessions, review, exitCommand,
+  help, clear, context, compact, model, mode, sessions, doctor, review, exitCommand,
 ]
