@@ -466,7 +466,6 @@ function describeTerminal(terminal: Terminal): string {
   }
 }
 
-// 本函数：惰性 ref——初值只在首次渲染时计算一次，避免每次渲染重复执行昂贵的构建。
 /**
  * A ref whose initial value is computed once, on first render.
  * 初值只在首次渲染时计算一次的 ref。
@@ -479,6 +478,7 @@ function describeTerminal(terminal: Terminal): string {
  * 对字面量无害，但当表达式会 fork git 子进程或遍历文件系统时就是灾难——
  * 每个流式 token 都会重渲染本屏，这份开销便摊到了每个 token 上。
  */
+// 本函数：惰性 ref——初值只在首次渲染时计算一次，避免每次渲染重复执行昂贵的构建。
 function useLazyRef<T>(make: () => T): React.MutableRefObject<T> {
   const ref = useRef<T | undefined>(undefined)
   if (ref.current === undefined) ref.current = make()
@@ -498,7 +498,6 @@ type DriveParams = {
   setStreamingText: React.Dispatch<React.SetStateAction<string>>
 }
 
-// 本函数：驱动 query 生成器，把事件分发成 React 状态更新，并返回回合终态。
 /**
  * Demultiplex the loop's events into React state.
  * 把循环事件解复用成 React 状态。
@@ -509,6 +508,7 @@ type DriveParams = {
  * 微妙之处在 `assistant_message` 的交接：在同一个 React 批次里既追加最终文本到 `entries`、
  * 又清空 `streamingText`，所以从流式文本切到定稿消息不会闪烁。
  */
+// 本函数：驱动 query 生成器，把事件分发成 React 状态更新，并返回回合终态。
 async function drive(params: DriveParams): Promise<Terminal> {
   const { setEntries, setStreamingText, onUsage, ...queryParams } = params
   const iterator = query(queryParams)

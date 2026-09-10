@@ -21,7 +21,6 @@ const STATUS_COLOUR = {
   denied: 'gray',
 } as const
 
-// 本组件：渲染一次工具调用（状态圆点 + 标题 + 摘要或 diff）。
 /**
  * One tool call in the transcript.
  * 转录中的一次工具调用。
@@ -32,6 +31,7 @@ const STATUS_COLOUR = {
  * 这个组件让各工具的 `renderResult` 有了意义：模型拿到完整 400 行输出，人只看到「12 files」。
  * Tool 契约之所以要有渲染器，就是为了分开服务这两类受众。
  */
+// 本组件：渲染一次工具调用（状态圆点 + 标题 + 摘要或 diff）。
 export function ToolCard({ title, status, summary, diff }: ToolCardProps): React.ReactElement {
   return (
     <Box flexDirection="column" marginTop={1}>

@@ -8,7 +8,7 @@ import type { Todo } from '../types/todo.js'
  * Todos live here rather than in the message list because they are a view, not
  * a fact about what was said. The model rewrites the whole list each time; the
  * UI renders the latest version. Nothing needs a history of it.
- * 待办放这里而非消息列表：它是视图而非"说过的话"。模型每次整份重写，UI 只渲染最新版，无需历史。
+ * 待办放这里而非消息列表：它是视图而非「说过的话」。模型每次整份重写，UI 只渲染最新版，无需历史。
  *
  * cf. src/state/AppState.tsx and AppStateStore.ts in the Claude Code tree,
  * which additionally hold running tasks, MCP connections and file history.

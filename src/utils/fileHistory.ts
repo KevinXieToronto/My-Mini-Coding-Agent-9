@@ -25,7 +25,7 @@ export type FileCheckpoint = {
   path: string
   /**
    * undefined means "did not exist" — restoring blanks the file.
-   * undefined 表示“原本不存在”，恢复时把文件清空。
+   * undefined 表示「原本不存在」，恢复时把文件清空。
    */
   content: string | undefined
   /**
@@ -87,7 +87,7 @@ export class FileHistory {
         if (checkpoint.content === undefined) {
           // The file did not exist before; the closest we get to "undo create"
           // without deleting user data is to blank it.
-          // 文件原本不存在；在不删除用户数据的前提下，清空是最接近“撤销创建”的做法。
+          // 文件原本不存在；在不删除用户数据的前提下，清空是最接近「撤销创建」的做法。
           writeFileSync(checkpoint.path, '', 'utf8')
         } else {
           writeFileSync(checkpoint.path, checkpoint.content, 'utf8')

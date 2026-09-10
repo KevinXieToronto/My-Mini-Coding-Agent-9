@@ -3,17 +3,19 @@ import { useState } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type React from 'react'
 
-// 本组件：最小行编辑器，处理回车提交、退格删除与普通字符输入。
 /**
  * A minimal line editor.
  * 一个极简的行编辑器。
  *
  * Ink ships a TextInput component, but writing the twenty lines yourself makes
- * the keypress model obvious — and the keypress model is what Chapter 13's
- * slash-command autocomplete builds on.
- * Ink 自带 TextInput，但自己写这二十行能把按键模型讲清楚——
- * 而第 13 章的斜杠命令自动补全正是建立在这个按键模型上。
+ * the keypress model obvious — and that keypress model is what slash-command
+ * autocomplete would build on. Chapter 13 wires up slash commands on submit and
+ * leaves the autocomplete itself as an exercise, so this editor stays minimal.
+ * Ink 自带 TextInput，但自己写这二十行能把按键模型讲清楚——斜杠命令的自动补全
+ * 正要建立在这个按键模型上。第 13 章只在提交时接入斜杠命令，自动补全留作练习，
+ * 因此这个编辑器保持最小实现。
  */
+// 本组件：最小行编辑器，处理回车提交、退格删除与普通字符输入。
 export function PromptInput({
   onSubmit,
 }: {

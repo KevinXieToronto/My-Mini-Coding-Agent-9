@@ -10,7 +10,7 @@ import type { Message } from '../types/message.js'
  * need to answer one question: "are we close to the limit?" Being 10% out on
  * that is fine, because the threshold has a buffer anyway.
  * 我们只估算，不做真正的分词：BPE 分词器体积大，且换个模型就不准；
- * 而我们只需回答“是否接近上限”，误差 10% 无妨——阈值本就留了余量。
+ * 而我们只需回答「是否接近上限」，误差 10% 无妨——阈值本就留了余量。
  *
  * The API tells us the true count in `usage` after each turn, so we correct
  * ourselves as we go — estimate to decide, measure to report.

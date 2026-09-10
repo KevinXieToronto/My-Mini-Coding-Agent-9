@@ -72,7 +72,7 @@ function totalTokens(messages: Message[]): number {
  * 40 KB 的 `Grep` 结果只在当回合有用，十个回合后就是死重，而且几乎总是窗口里最大的一块。
  * 保留开头部分，让模型仍能看出这次调用返回了什么。
  */
-// 本函数：把末尾保留区之外、超长的工具结果截断为“开头 + 省略说明”。
+// 本函数：把末尾保留区之外、超长的工具结果截断为「开头 + 省略说明」。
 export function snipOldToolResults(messages: Message[]): Message[] {
   const cutoff = Math.max(0, messages.length - KEEP_TAIL)
   return messages.map((message, index) => {

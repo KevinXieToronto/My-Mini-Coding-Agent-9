@@ -15,7 +15,7 @@ import { BUILTIN_COMMANDS } from './commands/builtins.js'
  * Later definitions win, so a project can override a personal command of the
  * same name — the same general-to-specific ordering as MINI.md in Chapter 8.
  * 顺序：内置 → 用户级 markdown → 项目级；后者覆盖前者，项目可覆盖同名个人命令，
- * 与第 8 章 MINI.md 的"由通用到具体"一致。
+ * 与第 8 章 MINI.md 的「由通用到具体」一致。
  *
  * cf. src/commands.ts in the Claude Code tree, which additionally merges
  * plugin commands and MCP prompts (as `mcp__<server>__<prompt>`).
@@ -120,7 +120,7 @@ export function splitFrontmatter(raw: string): {
     return { frontmatter: parsed ?? {}, body: match[2] ?? '' }
   } catch {
     // Malformed YAML: treat the whole file as the body rather than failing.
-    // YAML 解析失败时退化为"整篇都是正文"，而不是报错。
+    // YAML 解析失败时退化为「整篇都是正文」，而不是报错。
     return { frontmatter: {}, body: raw }
   }
 }

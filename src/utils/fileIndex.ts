@@ -16,8 +16,8 @@ import ignore, { type Ignore } from 'ignore'
  *
  * cf. the file-index utilities in src/utils/ in the Claude Code tree, which
  * additionally keep an mtime-sorted index so "most recently changed" is cheap.
- * cf. Claude Code 中 src/utils/ 的文件索引工具；它还维护按 mtime 排序的索引，
- * 因此"最近修改"的查询很便宜。
+ * 参见 Claude Code 中 src/utils/ 的文件索引工具；它还维护按 mtime 排序的索引，
+ * 因此「最近修改」的查询很便宜。
  */
 
 const ALWAYS_SKIP = new Set([

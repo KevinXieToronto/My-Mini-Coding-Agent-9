@@ -38,7 +38,7 @@ type GrepInput = z.infer<typeof schema>
  *
  * cf. src/tools/GrepTool/ in the Claude Code tree, which ships a ripgrep
  * binary rather than hoping for one.
- * cf. Claude Code 的 src/tools/GrepTool/：它自带 ripgrep 二进制，而不是指望系统里有。
+ * 参见 Claude Code 的 src/tools/GrepTool/：它自带 ripgrep 二进制，而不是指望系统里有。
  */
 export const GrepTool = buildTool({
   name: 'Grep',
@@ -95,7 +95,7 @@ function tryRipgrep(input: GrepInput, root: string): { result: string; data: unk
   } catch (error) {
     const code = (error as { code?: string; status?: number }).code
     // status 1 means "no matches" — a real answer, not a missing binary.
-    // 退出码 1 表示"没有匹配"——这是有效答案，不是缺少二进制。
+    // 退出码 1 表示「没有匹配」——这是有效答案，不是缺少二进制。
     if ((error as { status?: number }).status === 1) {
       return { result: 'No matches found.', data: { files: 0, matches: 0 } }
     }

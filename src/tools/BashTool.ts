@@ -25,10 +25,13 @@ const READ_ONLY_PREFIXES = [
 
 /**
  * Splitting on the operators that chain commands. This is the crudest possible
- * version and Chapter 9 replaces it with a real parser — but even this stops
- * the obvious `git status && rm -rf /` bypass, which a naive prefix check
- * would wave straight through.
- * 按串联命令的操作符切分。这是最粗糙的版本，第 9 章会换成真正的解析器——
+ * version: Chapter 9 added the real parser in `src/utils/bashParser.ts`, which
+ * is what the permission engine uses. This crude split survives only as this
+ * tool's own read-only fast path — but even it stops the obvious
+ * `git status && rm -rf /` bypass, which a naive prefix check would wave
+ * straight through.
+ * 按串联命令的操作符切分。这是最粗糙的版本：第 9 章已在 `src/utils/bashParser.ts`
+ * 中实现真正的解析器，权限引擎用的是那一个；这里的粗切分只作为本工具自身的只读快速通道。
  * 但即便如此也已挡住 `git status && rm -rf /` 这类绕过，而朴素的前缀检查会直接放行。
  */
 // 本函数：按 && || ; | 切分命令串，返回去空的子命令列表。

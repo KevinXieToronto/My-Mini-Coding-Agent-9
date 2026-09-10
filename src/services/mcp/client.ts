@@ -12,8 +12,8 @@ import { namespacedName, type McpServerConfig } from './config.js'
  * own Tool contract.
  * MCP 客户端：来自第三方、经由传输层抵达、却穿着我们自己 Tool 契约外衣的能力。
  *
- * cf. src/services/mcpClient.ts in the Claude Code tree.
- * 参见 Claude Code 的 src/services/mcpClient.ts。
+ * cf. src/services/mcp/ in the Claude Code tree — client.ts and MCPConnectionManager.tsx.
+ * 参见 Claude Code 的 src/services/mcp/：client.ts 与 MCPConnectionManager.tsx。
  */
 
 const CONNECT_TIMEOUT_MS = 30_000

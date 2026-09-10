@@ -19,7 +19,6 @@ import { loadSkills, renderSkillsSection, visibleSkills } from './skills/loadSki
 const MAX_INSTRUCTION_BYTES = 32_000
 const MAX_IMPORT_DEPTH = 3
 
-// 本函数：自用户目录与文件系统根目录一路向下，收集所有 MINI.md 指令文件路径。
 /**
  * Find MINI.md files from the home directory down to the working directory.
  * 从用户目录一路向下到工作目录，查找 MINI.md 文件。
@@ -35,6 +34,7 @@ const MAX_IMPORT_DEPTH = 3
  * Claude Code 同样如此，分四层（托管策略、用户、项目、本地），
  * 并会在工具触及某目录时按需加载该目录的文件。
  */
+// 本函数：自用户目录与文件系统根目录一路向下，收集所有 MINI.md 指令文件路径。
 export function findInstructionFiles(cwd: string): string[] {
   const found: string[] = []
 
@@ -68,9 +68,9 @@ export function findInstructionFiles(cwd: string): string[] {
   return found
 }
 
-// 本函数：读取全部指令文件、展开其中的 @ 导入，并按上限截断后拼成一段文本。
 /** Read the instruction files and resolve `@path` imports inside them. */
 /** 读取指令文件，并解析其中的 `@path` 导入。 */
+// 本函数：读取全部指令文件、展开其中的 @ 导入，并按上限截断后拼成一段文本。
 export function loadProjectInstructions(cwd: string): string | undefined {
   const files = findInstructionFiles(cwd)
   if (files.length === 0) return undefined
@@ -86,7 +86,6 @@ export function loadProjectInstructions(cwd: string): string | undefined {
     : joined
 }
 
-// 本函数：递归展开指令文件中的 `@相对路径` 导入，并用 seen 集合防止循环导入。
 /**
  * `@relative/path.md` on its own line pulls that file inline.
  * 单独成行的 `@relative/path.md` 会把该文件内联进来。
@@ -95,6 +94,7 @@ export function loadProjectInstructions(cwd: string): string | undefined {
  * the CLI at startup, which is a miserable thing to debug.
  * `seen` 集合并非多虑：两个文件互相导入会让 CLI 启动时挂死，这种问题极难排查。
  */
+// 本函数：递归展开指令文件中的 `@相对路径` 导入，并用 seen 集合防止循环导入。
 function expandImports(text: string, baseDir: string, depth: number, seen: Set<string>): string {
   if (depth >= MAX_IMPORT_DEPTH) return text
 
@@ -107,12 +107,12 @@ function expandImports(text: string, baseDir: string, depth: number, seen: Set<s
   })
 }
 
-// 本函数：生成精简的 git 概览（分支、改动文件、近期提交），非仓库或无 git 时返回 undefined。
 /**
  * A compact git summary. Cheap orientation: the model learns the branch and
  * what is dirty without spending a tool call on it.
  * 精简的 git 概览。低成本的方位感：模型无需花一次工具调用即可知道分支与哪些文件被改动。
  */
+// 本函数：生成精简的 git 概览（分支、改动文件、近期提交），非仓库或无 git 时返回 undefined。
 export function getGitStatus(cwd: string): string | undefined {
   const git = (args: string[]): string | undefined => {
     try {
@@ -168,7 +168,6 @@ export type SessionContext = {
   projectInstructions?: string
 }
 
-// 本函数：每会话构建一次上下文（平台、日期、git 状态、项目指令），刻意不逐回合刷新以保住提示词缓存。
 /**
  * Built once per session. Git status and MINI.md do change while you work, but
  * re-reading them every turn would break the prompt cache for a marginal
@@ -176,6 +175,7 @@ export type SessionContext = {
  * 每会话构建一次。git 状态与 MINI.md 在工作中确会变化，但逐回合重读会打断提示词缓存，
  * 收益甚微——何况代理随时可以自己跑 `git status`。
  */
+// 本函数：每会话构建一次上下文（平台、日期、git 状态、项目指令），刻意不逐回合刷新以保住提示词缓存。
 export function buildSessionContext(cwd: string, mcpInstructions?: string): SessionContext {
   return {
     cwd,
@@ -194,7 +194,6 @@ export function buildSessionContext(cwd: string, mcpInstructions?: string): Sess
   }
 }
 
-// 本函数：展开用户输入里的 `@路径` 提及，把文件内容附在提示词末尾。
 /**
  * Expand `@path` mentions in what the USER typed, inlining file contents.
  * 展开用户输入中的 `@path` 提及，把文件内容内联进来。
@@ -204,6 +203,7 @@ export function buildSessionContext(cwd: string, mcpInstructions?: string): Sess
  * 与上面的导入展开不同：它在每次提问时运行，
  * 「解释一下 @src/query.ts」正是靠它省下模型的一次 Read 调用。
  */
+// 本函数：展开用户输入里的 `@路径` 提及，把文件内容附在提示词末尾。
 export function expandUserMentions(text: string, cwd: string): string {
   const attachments: string[] = []
 

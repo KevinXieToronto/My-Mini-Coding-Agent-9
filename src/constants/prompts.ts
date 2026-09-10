@@ -20,9 +20,9 @@ import type { Tool } from '../Tool.js'
 
 export const DYNAMIC_BOUNDARY = '<!-- dynamic -->'
 
-// 本函数：返回发行版内不变、可被缓存的静态提示词块（含工具清单）。
 /** Never changes within a release. Cacheable. */
 /** 在一个发行版内永不变化，可缓存。 */
+// 本函数：返回发行版内不变、可被缓存的静态提示词块（含工具清单）。
 function staticBlocks(tools: Tool[]): string[] {
   return [
     `You are mini-cc, a coding agent that works in the user's terminal.
@@ -70,9 +70,9 @@ export type DynamicContext = {
   projectInstructions?: string
 }
 
-// 本函数：返回随会话或回合变化的动态提示词块，必须排在静态块之后。
 /** Changes per session or per turn. Must come last. */
 /** 随会话或回合变化，必须放在最后。 */
+// 本函数：返回随会话或回合变化的动态提示词块，必须排在静态块之后。
 function dynamicBlocks(context: DynamicContext): string[] {
   const blocks: string[] = [
     `# Environment

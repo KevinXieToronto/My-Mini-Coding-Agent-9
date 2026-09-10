@@ -28,6 +28,7 @@ import { CONFIG_DIR_NAME } from '../../constants/product.js'
  * 参见 src/services/mcp/config.ts。
  */
 
+// 本常量：stdio 传输的 MCP 服务器配置——本地子进程，用 command/args/env 启动。
 const StdioServerSchema = z.object({
   type: z.literal('stdio').optional(),
   command: z.string(),
@@ -35,20 +36,23 @@ const StdioServerSchema = z.object({
   env: z.record(z.string()).optional(),
 })
 
+// 本常量：http 传输的 MCP 服务器配置——远端服务，用 url/headers 连接。
 const HttpServerSchema = z.object({
   type: z.literal('http'),
   url: z.string().url(),
   headers: z.record(z.string()).optional(),
 })
 
+// 本常量：单个 MCP 服务器的配置（stdio 或 http 二选一），用于校验配置文件条目。
 export const McpServerSchema = z.union([StdioServerSchema, HttpServerSchema])
 export type McpServerConfig = z.infer<typeof McpServerSchema>
 
+// 本常量：整个 mcp.json / .mcp.json 文件的结构，缺省为空的 mcpServers 表。
 const McpConfigSchema = z.object({
   mcpServers: z.record(McpServerSchema).default({}),
 })
 
-// 本函数：按“用户级 → 项目级”顺序合并 MCP 服务器配置，坏配置只警告不致命。
+// 本函数：按「用户级 → 项目级」顺序合并 MCP 服务器配置，坏配置只警告不致命。
 export function loadMcpConfig(cwd: string): Record<string, McpServerConfig> {
   const servers: Record<string, McpServerConfig> = {}
 

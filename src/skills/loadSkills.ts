@@ -112,7 +112,6 @@ function toStringArray(value: unknown): string[] | undefined {
   return undefined
 }
 
-// 本函数：按已触及的文件路径筛出当前应当对模型可见的技能。
 /**
  * Which skills should be advertised right now?
  * 此刻应当对模型公布哪些技能？
@@ -123,6 +122,7 @@ function toStringArray(value: unknown): string[] | undefined {
  * 无条件技能始终列出；带 `paths` 的条件技能，要等代理触及匹配文件后才出现——
  * 于是 Python 专用技能在 TypeScript 仓库里一分钱不花。
  */
+// 本函数：按已触及的文件路径筛出当前应当对模型可见的技能。
 export function visibleSkills(skills: Skill[], touchedPaths: Iterable<string>): Skill[] {
   const touched = [...touchedPaths]
   return skills.filter(skill => {
@@ -132,12 +132,12 @@ export function visibleSkills(skills: Skill[], touchedPaths: Iterable<string>): 
   })
 }
 
-// 本函数：把技能清单渲染成系统提示词区块——只写名称与描述，正文留在磁盘上。
 /**
  * The prompt section. Descriptions only — the bodies stay on disk.
  * This function IS the progressive-disclosure mechanism.
  * 提示词区块：只含描述，正文留在磁盘。本函数就是「渐进式披露」机制本身。
  */
+// 本函数：把技能清单渲染成系统提示词区块——只写名称与描述，正文留在磁盘上。
 export function renderSkillsSection(skills: Skill[]): string {
   if (skills.length === 0) return ''
   return [

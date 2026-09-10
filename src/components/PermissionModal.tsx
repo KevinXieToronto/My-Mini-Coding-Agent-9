@@ -8,7 +8,6 @@ export type PermissionRequest = {
   resolve: (answer: 'yes' | 'no' | 'always') => void
 }
 
-// 本组件：渲染授权提示并把按键（y / a / n）回传给等待中的 Promise。
 /**
  * The approval prompt, as a React component.
  * 以 React 组件形式呈现的授权提示。
@@ -23,6 +22,7 @@ export type PermissionRequest = {
  * cf. src/components/permissions/PermissionRequest.tsx.
  * 参见 src/components/permissions/PermissionRequest.tsx。
  */
+// 本组件：渲染授权提示并把按键（y / a / n）回传给等待中的 Promise。
 export function PermissionModal({ request }: { request: PermissionRequest }): React.ReactElement {
   useInput((input, key) => {
     const answer = input.toLowerCase()

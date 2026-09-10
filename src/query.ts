@@ -211,7 +211,7 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
       )
       if (stop.keepGoing && !stopHookFired) {
         stopHookFired = true // once per turn, or a badly written hook loops forever
-        // 每回合只放行一次，否则写坏的钩子会让循环永不停歇
+        // 每个用户回合（即每次 query() 调用）只放行一次，否则写坏的钩子会让循环永不停歇
         const nudge: Message = { role: 'user', content: `[Stop hook] ${stop.reason}` }
         messages.push(nudge)
         onMessage(nudge)
@@ -421,7 +421,6 @@ ${post.additionalContext}
   }
 }
 
-// 本函数：把系统提示词作为一条 system 消息前置到请求消息列表，而不写入持久化的会话记录。
 /**
  * The system prompt is not part of the message history we persist — it is
  * rebuilt on every request. Keeping it out of `messages` means compaction
@@ -429,6 +428,7 @@ ${post.additionalContext}
  * 系统提示词不属于我们持久化的消息历史，而是每次请求重新拼装。
  * 把它排除在 `messages` 之外，压缩（第 11 章）就绝不会误把代理的指令摘要掉。
  */
+// 本函数：把系统提示词作为一条 system 消息前置到请求消息列表，而不写入持久化的会话记录。
 function withSystemPrompt(messages: ApiMessage[], systemPrompt?: string): ApiMessage[] {
   if (!systemPrompt) return messages
   return [{ role: 'system', content: systemPrompt }, ...messages]

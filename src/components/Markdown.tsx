@@ -5,7 +5,6 @@ import chalk from 'chalk'
 import type React from 'react'
 import type { Tokens } from 'marked'
 
-// 本函数：把 Markdown 源文本渲染为单个 ANSI 字符串。
 /**
  * Render markdown to ANSI text.
  * 把 Markdown 渲染成 ANSI 文本。
@@ -17,6 +16,7 @@ import type { Tokens } from 'marked'
  * 不为每个 Markdown 节点建 React 树，而是产出一个带样式的字符串交给单个 <Text>。
  * 终端 Markdown 基本只是行内样式；扁平字符串在窗口缩放时能正确重排，嵌套 Ink Box 则会与布局引擎冲突。
  */
+// 本函数：把 Markdown 源文本渲染为单个 ANSI 字符串。
 export function renderMarkdown(source: string): string {
   const tokens = marked.lexer(source)
   return tokens.map(renderToken).join('').trimEnd()
@@ -59,11 +59,11 @@ function renderToken(token: Tokens.Generic): string {
   }
 }
 
-// 本函数：处理行内样式（代码、粗体、斜体）。
 /**
  * Inline styling: `code`, **bold**, *italic*.
  * 行内样式：`代码`、**粗体**、*斜体*。
  */
+// 本函数：处理行内样式（代码、粗体、斜体）。
 function inline(text: string): string {
   return text
     .replace(/`([^`]+)`/g, (_, code: string) => chalk.yellow(code))

@@ -12,7 +12,6 @@ import { createAppState } from '../state/appState.js'
 import { runContextHooks } from '../utils/hooks.js'
 import type { McpBundle } from '../screens/REPL.js'
 
-// 本函数：以非交互方式跑一个回合，把流式文本直接写到 stdout。
 /**
  * Non-interactive mode: one prompt in, plain text out, exit.
  * 非交互模式：输入一个提问，输出纯文本，然后退出。
@@ -31,6 +30,7 @@ import type { McpBundle } from '../screens/REPL.js'
  * auto-approving in a script is how an agent deletes a build server.
  * 这里权限默认拒绝：没有人可问；脚本里自动批准，正是代理删掉构建服务器的方式。
  */
+// 本函数：以非交互方式跑一个回合，把流式文本直接写到 stdout。
 export async function runPrintMode(
   settings: Settings,
   permissions: PermissionContext,

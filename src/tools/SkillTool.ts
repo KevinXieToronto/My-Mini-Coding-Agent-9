@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { buildTool } from '../Tool.js'
 import type { Skill } from '../skills/loadSkills.js'
 
-// 本函数：构造 Skill 工具；技能列表以取值函数注入，便于会话期内替换而不重建工具。
 /**
  * Invoke a skill: load its body into the conversation.
  * 调用技能：把它的正文加载进对话。
@@ -19,6 +18,7 @@ import type { Skill } from '../skills/loadSkills.js'
  * cf. src/tools/SkillTool/SkillTool.ts.
  * 参见 src/tools/SkillTool/SkillTool.ts。
  */
+// 本函数：构造 Skill 工具；技能列表以取值函数注入，便于会话期内替换而不重建工具。
 export function createSkillTool(getSkills: () => Skill[]) {
   const schema = z.strictObject({
     skill: z.string().describe('Exact skill name from the Skills list. Do not guess names.'),

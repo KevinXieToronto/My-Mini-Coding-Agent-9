@@ -5,7 +5,6 @@ import type React from 'react'
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
-// 本组件：按固定间隔切换帧的转圈指示器，附带标签与中断提示。
 /**
  * Ink re-renders on state change, so an interval that bumps an index is all a
  * spinner is. Claude Code's version also cycles the label word, which is the
@@ -13,6 +12,7 @@ const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '
  * Ink 在状态变化时重渲染，所以转圈动画只需一个定时器递增帧下标。
  * Claude Code 还会轮换标签词——这是让等待显得更短的最省事做法。
  */
+// 本组件：按固定间隔切换帧的转圈指示器，附带标签与中断提示。
 export function Spinner({ label }: { label: string }): React.ReactElement {
   const [frame, setFrame] = useState(0)
   useEffect(() => {
