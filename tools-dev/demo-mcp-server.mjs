@@ -12,7 +12,7 @@
  *     "mcpServers": {
  *       "filesystem": {
  *         "command": "npx",
- *         "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/dev/scratch"]
+ *         "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/temp"]
  *       }
  *     }
  *   }
