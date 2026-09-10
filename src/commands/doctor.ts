@@ -166,7 +166,7 @@ export const doctor: Command = {
       checks.push({ label, ok: true, detail })
     }
 
-    const width = Math.max(...checks.map(check => check.label.length))
+    const width = Math.max(...checks.map(check => check.label.length))  // 取最长标签长度作为对齐宽度，报告各行的冒号才能排成一列
     return {
       type: 'text',
       text: [

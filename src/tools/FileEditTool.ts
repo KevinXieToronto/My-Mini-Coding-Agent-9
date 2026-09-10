@@ -69,7 +69,7 @@ export const FileEditTool = buildTool({
     } catch {
       return { ok: false, message: `File not found: ${input.file_path}` }
     }
-    if (stat.mtimeMs > seen.mtimeMs) {
+    if (stat.mtimeMs > seen.mtimeMs) {  // 把当前 mtime 与「读取时记下的 mtime」比对：变大说明文件在我们背后被改过，模型手里的内容已过期
       return {
         ok: false,
         message:
@@ -88,7 +88,7 @@ export const FileEditTool = buildTool({
           'It must match the file exactly, including whitespace and indentation.',
       }
     }
-    if (occurrences > 1 && !input.replace_all) {
+    if (occurrences > 1 && !input.replace_all) {  // 多处命中却没要求全替换：宁可报错让模型补上下文，也不擅自改第一处
       return {
         ok: false,
         message:
@@ -112,14 +112,14 @@ export const FileEditTool = buildTool({
     // explicit "no awaits in this region" comment.
     // 读—改—写之间不含 await：没有别的任务能穿插进来把文件写坏。
     // Claude Code 在对应区域专门标注了「此处不得 await」。
-    const before = readFileSync(path, 'utf8')
+    const before = readFileSync(path, 'utf8')  // 自此到 writeFileSync 全程同步、不含 await，读到写之间无人能插队改动此文件
     const replacements = countOccurrences(before, input.old_string)
     const after = input.replace_all
-      ? before.split(input.old_string).join(input.new_string)
+      ? before.split(input.old_string).join(input.new_string)  // 用 split+join 做全量替换，避开 String.replace 把 $& 等符号当作替换模式解释的坑
       : before.replace(input.old_string, input.new_string)
     writeFileSync(path, after, 'utf8')
 
-    ctx.readFileState.set(path, { timestamp: Date.now(), mtimeMs: statSync(path).mtimeMs })
+    ctx.readFileState.set(path, { timestamp: Date.now(), mtimeMs: statSync(path).mtimeMs })  // 写完立刻刷新已读状态，否则自己刚写的文件会被下一次编辑当成「已过期」
 
     const applied = input.replace_all ? replacements : 1
     return {
@@ -134,7 +134,7 @@ export const FileEditTool = buildTool({
 // 本函数：统计子串在文本中出现的次数。
 function countOccurrences(haystack: string, needle: string): number {
   if (needle === '') return 0
-  return haystack.split(needle).length - 1
+  return haystack.split(needle).length - 1  // 切成 n 段即出现 n-1 次；空串会切出无穷多段，故上一行先行拦截
 }
 
 /**
@@ -147,7 +147,7 @@ function snippetAround(content: string, marker: string): string {
   if (index === -1) return ''
   const linesBefore = content.slice(0, index).split('\n')
   const allLines = content.split('\n')
-  const startLine = Math.max(0, linesBefore.length - 3)
+  const startLine = Math.max(0, linesBefore.length - 3)  // 命中点之前的文本有几行，行号就是几；据此上取 3 行作为片段起点
   const endLine = Math.min(allLines.length, linesBefore.length + marker.split('\n').length + 2)
   return allLines
     .slice(startLine, endLine)

@@ -68,9 +68,9 @@ export const TodoWriteTool = buildTool({
   },
 
   async execute(input, ctx) {
-    const key = ctx.agentId ?? 'main'
+    const key = ctx.agentId ?? 'main'  // 按 agentId 分桶存放：子代理有自己的清单，不会覆盖主循环的
     const previous = ctx.appState.todos[key] ?? []
-    ctx.appState.todos[key] = input.todos
+    ctx.appState.todos[key] = input.todos  // 整份替换而非增量合并；appState 按引用共享，赋值后 UI 面板立即看到新清单
 
     const done = input.todos.filter(todo => todo.status === 'completed').length
     const current = input.todos.find(todo => todo.status === 'in_progress')

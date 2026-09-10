@@ -86,10 +86,10 @@ export function loadSettings(cwd: string = process.cwd()): Settings {
   return {
     ...DEFAULTS,
     ...user,
-    ...project,
+    ...project,  // 展开顺序即优先级：项目级最后展开，故同名标量字段由它胜出
     permissions: {
       allow: [...(user.permissions?.allow ?? []), ...(project.permissions?.allow ?? [])],
-      deny: [...(user.permissions?.deny ?? []), ...(project.permissions?.deny ?? [])],
+      deny: [...(user.permissions?.deny ?? []), ...(project.permissions?.deny ?? [])],  // 权限规则取并集而非覆盖：项目配置只能追加规则，不能丢掉用户全局设的 deny
       ask: [...(user.permissions?.ask ?? []), ...(project.permissions?.ask ?? [])],
     },
     additionalDirectories: [

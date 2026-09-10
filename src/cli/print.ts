@@ -112,7 +112,7 @@ ${submitted.additionalContext}
     },
     // No TTY means no human means no approval.
     // 没有 TTY 就没有人，也就没有批准。
-    canUseTool: async () => false,
+    canUseTool: async () => false,  // 非交互模式下无人可问，一律拒绝；脚本里自动批准正是代理闯祸的方式
   })
 
   while (true) {
@@ -124,7 +124,7 @@ ${submitted.additionalContext}
       }
       return
     }
-    if (step.value.type === 'text_delta') stdout.write(step.value.text)
+    if (step.value.type === 'text_delta') stdout.write(step.value.text)  // 只把文本增量写到 stdout，工具事件一概不打印——stdout 要保持为可管道的纯答案
   }
 }
 
@@ -137,6 +137,6 @@ function readAllStdin(): Promise<string> {
     stdin.on('end', () => resolve(data))
     // A TTY with no piped input would hang here forever.
     // TTY 且没有管道输入时，这里会永久挂起。
-    if (stdin.isTTY) resolve('')
+    if (stdin.isTTY) resolve('')  // TTY 且无管道输入时不会有 end 事件，立即以空串兑现，避免永久挂起
   })
 }

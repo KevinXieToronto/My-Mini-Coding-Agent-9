@@ -74,7 +74,7 @@ function totalTokens(messages: Message[]): number {
  */
 // 本函数：把末尾保留区之外、超长的工具结果截断为「开头 + 省略说明」。
 export function snipOldToolResults(messages: Message[]): Message[] {
-  const cutoff = Math.max(0, messages.length - KEEP_TAIL)
+  const cutoff = Math.max(0, messages.length - KEEP_TAIL)  // 下标小于 cutoff 的才算「旧」；末尾 KEEP_TAIL 条原样保留，模型正靠它们工作
   return messages.map((message, index) => {
     if (index >= cutoff) return message
     if (message.role !== 'tool') return message
@@ -124,7 +124,7 @@ export async function compactConversation(
   // 先走便宜的那一遍。
   const snipped = snipOldToolResults(messages)
   const afterSnip = totalTokens(snipped)
-  if (afterSnip < tokensBefore * 0.7) {
+  if (afterSnip < tokensBefore * 0.7) {  // 光靠裁剪就省下三成以上就到此为止，不必再花一次模型调用去做摘要
     return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'snip' }
   }
 
@@ -140,7 +140,7 @@ export async function compactConversation(
   // so we trim the head to a budget before sending it.
   // 摘要请求本身也必须装得下窗口。为了从溢出中恢复反而再次溢出，正是本文件要防的事，
   // 因此发送前先把 head 裁到预算之内。
-  const sendable = headWithinBudget(head, summaryBudget(settings.model))
+  const sendable = headWithinBudget(head, summaryBudget(settings.model))  // 摘要请求自身也要装进窗口，先把待总结的历史裁到预算内再发出去
   if (sendable.length === 0) {
     return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'snip' }
   }
@@ -152,7 +152,7 @@ export async function compactConversation(
       settings,
       signal,
     })) {
-      if (event.type === 'done') summary = event.text
+      if (event.type === 'done') summary = event.text  // 只取终态的完整文本；摘要不需要流式展示给用户
     }
   } catch {
     // Swallowed on purpose. Compaction runs INSIDE the agent loop, so a throw
@@ -210,7 +210,7 @@ export function summaryBudget(model: string): number {
 export function headWithinBudget(head: Message[], budget: number): Message[] {
   let used = 0
   let start = head.length
-  for (let index = head.length - 1; index >= 0; index--) {
+  for (let index = head.length - 1; index >= 0; index--) {  // 从最新一端向前累加，预算用尽即停——于是被丢弃的总是最旧、最不相关的那些
     const cost = estimateMessageTokens(head[index]!)
     if (used + cost > budget) break
     used += cost
@@ -232,6 +232,6 @@ export function headWithinBudget(head: Message[], budget: number): Message[] {
 // 本函数：去掉末尾保留区开头那些找不到配对 assistant 消息的 tool 消息。
 function ensureToolPairsIntact(tail: Message[]): Message[] {
   let start = 0
-  while (start < tail.length && tail[start]!.role === 'tool') start += 1
+  while (start < tail.length && tail[start]!.role === 'tool') start += 1  // 跳过开头连续的 tool 消息：它们配对的 assistant 消息已被摘要掉，留着会让下次请求 400
   return tail.slice(start)
 }

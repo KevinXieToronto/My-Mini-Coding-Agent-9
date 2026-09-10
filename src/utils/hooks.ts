@@ -48,7 +48,7 @@ export function matcherApplies(
 ): boolean {
   if (!matcher) return true
 
-  const ruleMatch = /^([A-Za-z_][\w-]*)\((.*)\)$/.exec(matcher.trim())
+  const ruleMatch = /^([A-Za-z_][\w-]*)\((.*)\)$/.exec(matcher.trim())  // 带括号即按权限规则解析（工具名 + 主体模式），不带括号才落到下面的工具名正则分支
   if (ruleMatch) {
     if (ruleMatch[1] !== toolName) return false
     const record = (input ?? {}) as Record<string, unknown>
@@ -62,7 +62,7 @@ export function matcherApplies(
   }
 
   try {
-    return new RegExp(`^(${matcher})$`).test(toolName)
+    return new RegExp(`^(${matcher})$`).test(toolName)  // 首尾加锚点并整体分组，使 "Edit|Write" 匹配整个工具名，而不是只匹配其中一段
   } catch {
     // A matcher that is not a valid regex is treated as a literal name, never
     // as "matches everything" — fail closed.
@@ -90,7 +90,7 @@ export function runHook(hook: HookCommand, payload: HookInput, cwd: string): Pro
 
     // 本函数：只结算一次——清掉超时器并把收集到的输出交回。
     const finish = (exitCode: number | null): void => {
-      if (settled) return
+      if (settled) return  // 超时、启动失败、正常退出可能先后触发，这个闩确保 Promise 只结算一次
       settled = true
       clearTimeout(timer)
       resolve({ output: parseHookOutput(stdout), stdout, stderr, exitCode })
@@ -112,7 +112,7 @@ export function runHook(hook: HookCommand, payload: HookInput, cwd: string): Pro
     })
     child.on('close', code => finish(code))
 
-    child.stdin.end(JSON.stringify(payload))
+    child.stdin.end(JSON.stringify(payload))  // 写完负载立刻关闭 stdin：钩子读到 EOF 才会结束，不关就会一直等下去
   })
 }
 
@@ -191,10 +191,10 @@ export async function runPreToolUseHooks(
 
     if (output.updatedInput) {
       result.updatedInput = output.updatedInput
-      current = { ...current, tool_input: output.updatedInput }
+      current = { ...current, tool_input: output.updatedInput }  // 改写后的入参喂给下一个钩子，于是后面的钩子看到的是最新版本而非模型原始参数
     }
 
-    if (output.permissionDecision === 'deny' || output.continue === false) {
+    if (output.permissionDecision === 'deny' || output.continue === false) {  // 拒绝即刻返回，后续钩子不再启动——更严格的答案必须胜出
       return {
         ...result,
         decision: 'deny',
@@ -204,7 +204,7 @@ export async function runPreToolUseHooks(
     if (output.permissionDecision === 'ask') {
       result.decision = 'ask'
       result.reason = output.permissionDecisionReason
-    } else if (output.permissionDecision === 'allow' && result.decision !== 'ask') {
+    } else if (output.permissionDecision === 'allow' && result.decision !== 'ask') {  // 多加的 !== 'ask' 判断保证放行只能升级 undefined，不能把已有的「询问」降级
       // An explicit allow skips the gate, but never overrides a prior 'ask'.
       // 显式放行会跳过闸门，但绝不覆盖此前已经产生的 'ask'。
       result.decision = 'allow'

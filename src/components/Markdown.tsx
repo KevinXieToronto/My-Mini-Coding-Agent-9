@@ -68,7 +68,7 @@ function inline(text: string): string {
   return text
     .replace(/`([^`]+)`/g, (_, code: string) => chalk.yellow(code))
     .replace(/\*\*([^*]+)\*\*/g, (_, bold: string) => chalk.bold(bold))
-    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_, em: string) => chalk.italic(em))
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_, em: string) => chalk.italic(em))  // 前后的否定环视排除 ** 情形；粗体已在上一步替换掉，斜体才不会误吃粗体标记
 }
 
 // 本组件：把 Markdown 字符串包进单个 Ink <Text> 渲染。

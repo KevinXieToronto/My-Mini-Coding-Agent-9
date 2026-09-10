@@ -58,7 +58,7 @@ function DiffView({ before, after }: { before: string; after: string }): React.R
   for (const [index, part] of parts.entries()) {
     if (!part.added && !part.removed) continue // context lines: skip entirely
     // 未改动的上下文行：整段跳过。
-    const lines = part.value.replace(/\n$/, '').split('\n')
+    const lines = part.value.replace(/\n$/, '').split('\n')  // diff 片段自带结尾换行，先削掉再切分，否则末尾会多出一个空行
     for (const [lineIndex, line] of lines.entries()) {
       if (shown >= MAX_DIFF_LINES) break
       shown += 1
@@ -72,7 +72,7 @@ function DiffView({ before, after }: { before: string; after: string }): React.R
   }
 
   const total = parts.reduce(
-    (count, part) => count + (part.added || part.removed ? part.count ?? 0 : 0),
+    (count, part) => count + (part.added || part.removed ? part.count ?? 0 : 0),  // 总数只统计增删行，与 shown 同口径，「还有 N 行」才不会把上下文行算进去
     0,
   )
 

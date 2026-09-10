@@ -16,7 +16,7 @@ const READ_ONLY_PREFIXES = [
 // 本函数：判断整条 PowerShell 命令是否只读——每个子命令都必须命中只读前缀名单。
 function isReadOnlyCommand(command: string): boolean {
   const parts = command
-    .split(/;|\|\||&&/)
+    .split(/;|\|\||&&/)  // 按 PowerShell 的串联符切分，逐段判定只读；单个 | 是管道不算串联，故不参与切分
     .map(part => part.trim())
     .filter(Boolean)
   if (parts.length === 0) return false

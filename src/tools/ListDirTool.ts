@@ -32,7 +32,7 @@ export const ListDirTool = buildTool({
     const target = isAbsolute(input.path) ? input.path : resolve(ctx.cwd, input.path)
     const entries = readdirSync(target)
       .slice(0, 200)
-      .map(name => (statSync(join(target, name)).isDirectory() ? `${name}/` : name))
+      .map(name => (statSync(join(target, name)).isDirectory() ? `${name}/` : name))  // 目录名补一个斜杠，排序后目录与文件在视觉上仍可一眼区分
       .sort()
 
     const header = relative(ctx.cwd, target) || '.'

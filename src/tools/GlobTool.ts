@@ -53,7 +53,7 @@ export const GlobTool = buildTool({
 
     const matches = walk({ cwd: root })
       .filter(file => isMatch(file.relative))
-      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)  // b 减 a 即时间倒序：最近改动的排在最前，模型读列表开头最认真
 
     if (matches.length === 0) {
       return { result: `No files match ${input.pattern}`, data: { count: 0 } }

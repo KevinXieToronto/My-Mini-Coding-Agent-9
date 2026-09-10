@@ -49,7 +49,7 @@ export function parseCommand(command: string): ParsedCommand {
 
     // Backslash escapes the next character (outside single quotes).
     // 反斜杠转义下一个字符（单引号内除外）。
-    if (char === '\\' && quote !== "'") {
+    if (char === '\\' && quote !== "'") {  // 单引号内反斜杠不具转义能力，故只在单引号之外处理转义
       current += char + (command[i + 1] ?? '')
       i += 1
       continue
@@ -70,7 +70,7 @@ export function parseCommand(command: string): ParsedCommand {
     // Subshells and command substitution: we do not model these, so we flag
     // them and refuse to vouch for the command later.
     // 子 shell 与命令替换不在建模范围内：打上标记，之后不为该命令担保。
-    if (char === '(' || (char === '$' && command[i + 1] === '(')) {
+    if (char === '(' || (char === '$' && command[i + 1] === '(')) {  // 遇到子 shell 或 $( 命令替换：既打标记，也进入深度计数，避免其内部的操作符被当作分隔符
       hasUnsupportedSyntax = true
       depth += 1
       current += char
@@ -87,12 +87,12 @@ export function parseCommand(command: string): ParsedCommand {
       continue
     }
 
-    if (depth === 0) {
+    if (depth === 0) {  // 只有在括号之外（深度为 0）才把 && || ; | 视作子命令分隔符
       const operator = OPERATORS.find(op => command.startsWith(op, i))
       if (operator) {
         parts.push(current.trim())
         current = ''
-        i += operator.length - 1
+        i += operator.length - 1  // 跳过整个操作符；减 1 是因为循环末尾的 i++ 还会再前进一格
         continue
       }
     }

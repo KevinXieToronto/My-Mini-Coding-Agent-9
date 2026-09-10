@@ -59,9 +59,9 @@ export const FileWriteTool = buildTool({
     // Snapshot before we touch it, so /rewind can put it back.
     // 动手前先快照，让 /rewind 能把它放回去。
     ctx.fileHistory.track(path, ctx.messageIndex())
-    const created = !existsSync(path)
+    const created = !existsSync(path)  // 写之前先判定是否新建，写完再问就永远是「已存在」了
 
-    mkdirSync(dirname(path), { recursive: true })
+    mkdirSync(dirname(path), { recursive: true })  // recursive 会补齐整条父目录链，且目录已存在时不报错
     writeFileSync(path, input.content, 'utf8')
 
     // Keep the cache honest: we now know exactly what is on disk.

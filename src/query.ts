@@ -134,13 +134,13 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
     // 这是 ARCHITECTURE.md 第四条设计原则的落地：恢复是循环状态转移，而非异常。
     // 空间不够由循环自行处理并继续，而不是就此结束回合。
     if (params.autoCompact !== false) {
-      const state = tokenState(messages, systemPrompt ?? '', settings.model)
+      const state = tokenState(messages, systemPrompt ?? '', settings.model)  // 每回合开头先估算用量，压缩发生在请求之前而不是收到 400 之后
       if (state.shouldCompact) {
         const result = await compactConversation(messages, settings, signal)
         // Replace the caller's array IN PLACE: it is the same array the REPL
         // and the session writer hold references to.
         // 就地替换调用方的数组：REPL 与会话写入器持有的是同一个数组引用。
-        messages.splice(0, messages.length, ...result.messages)
+        messages.splice(0, messages.length, ...result.messages)  // 就地清空再填回，保证 REPL 与会话写入器持有的同一数组引用同步看到压缩结果
         yield {
           type: 'compacted',
           tokensBefore: result.tokensBefore,
@@ -236,7 +236,7 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
         // malformed, so we synthesise error results for everything left.
         // 每个 tool_use 必须有对应的 tool_result，否则下一次请求格式非法，
         // 因此为所有尚未应答的调用合成错误结果。
-        const answered = new Set(
+        const answered = new Set(  // 先统计已经有 tool_result 的调用 id，避免给同一个调用补发第二条结果
           messages.flatMap(message => (message.role === 'tool' ? [message.toolCallId] : [])),
         )
         for (const pending of toolCalls) {
@@ -322,7 +322,7 @@ async function runOneTool(
   // The schema is the first wall. strictObject rejects unknown keys, which
   // catches a surprising number of model mistakes.
   // schema 是第一道墙。strictObject 拒绝未知字段，能拦下相当多的模型失误。
-  const parsed = tool.inputSchema.safeParse(raw)
+  const parsed = tool.inputSchema.safeParse(raw)  // strictObject 会连未知字段一并拒绝，能拦下模型「多写一个参数」这类常见失误
   if (!parsed.success) {
     return {
       result: `InputValidationError: ${call.name} arguments are invalid.\n${formatZodError(parsed.error)}`,
@@ -357,7 +357,7 @@ async function runOneTool(
   if (pre.updatedInput) {
     // Re-validate: a hook is not trusted to produce a well-formed input.
     // 重新校验：钩子并不被信任能产出格式良好的入参。
-    const reparsed = tool.inputSchema.safeParse(pre.updatedInput)
+    const reparsed = tool.inputSchema.safeParse(pre.updatedInput)  // 钩子改写后的入参重新过一遍 schema，校验不通过就丢弃改写、沿用原入参
     if (reparsed.success) input = reparsed.data
   }
 

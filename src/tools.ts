@@ -99,7 +99,7 @@ export function getToolsWithAgent(
   const base = [
     ...getAllTools(mode),
     createSkillTool(() => skills) as unknown as Tool,
-    ...[...mcpTools].sort((a, b) => a.name.localeCompare(b.name)),
+    ...[...mcpTools].sort((a, b) => a.name.localeCompare(b.name)),  // 先复制再排序，避免就地改动调用方数组；MCP 工具排在内置工具之后自成一个有序分区
   ]
   const agent = createAgentTool({
     // Sub-agents get skills too — that is how a skill can say "delegate the
@@ -111,7 +111,7 @@ export function getToolsWithAgent(
     getTools: () => [
       ...getSubagentTools(mode),
       createSkillTool(() => skills) as unknown as Tool,
-      ...[...mcpTools].sort((a, b) => a.name.localeCompare(b.name)),
+      ...[...mcpTools].sort((a, b) => a.name.localeCompare(b.name)),  // 子代理取用同一批 MCP 工具，同样复制后排序，与主池保持一致的稳定顺序
     ],
     async runNestedQuery({ messages, tools, systemPrompt, ctx, maxTurns }) {
       const { query } = await import('./query.js')
@@ -130,7 +130,7 @@ export function getToolsWithAgent(
 
       let turns = 0
       while (true) {
-        const step = await iterator.next()
+        const step = await iterator.next()  // 手动驱动生成器并丢弃沿途事件：子代理的过程不进父级转录，只有终值有用
         if (step.done) {
           turns = step.value.turns
           break
@@ -139,7 +139,7 @@ export function getToolsWithAgent(
 
       // The last assistant text is the report that crosses back.
       // 最后一条助手文本即回传的报告。
-      const last = [...messages].reverse().find(m => m.role === 'assistant' && m.content.trim())
+      const last = [...messages].reverse().find(m => m.role === 'assistant' && m.content.trim())  // 复制后反转再找，等价于从后往前取最后一条非空助手消息，且不破坏原数组顺序
       return { text: last && last.role === 'assistant' ? last.content : '', turns }
     },
   })

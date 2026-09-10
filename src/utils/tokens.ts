@@ -67,7 +67,7 @@ export function estimateConversationTokens(messages: Message[], systemPrompt = '
  * 按模型名前缀给出上下文窗口。未知模型取保守默认值——猜大了只会在回合中途
  * 以 400 错误的形式撞上限，那是最糟的时机。
  */
-const CONTEXT_WINDOWS: [prefix: string, tokens: number][] = [
+const CONTEXT_WINDOWS: [prefix: string, tokens: number][] = [  // 顺序即优先级：更长的前缀必须排在更短的之前，否则 gpt-5.6-luna 会先被 gpt-5 命中
   // Specs unpublished; conservative placeholders until real numbers land.
   // 规格未公开；先用保守占位值，等官方数字确认后再改。
   ['gpt-5.6-luna', 128_000],
@@ -91,7 +91,7 @@ const DEFAULT_CONTEXT_WINDOW = 32_768
 export function contextWindowFor(model: string): number {
   const name = model.toLowerCase()
   for (const [prefix, tokens] of CONTEXT_WINDOWS) {
-    if (name.startsWith(prefix)) return tokens
+    if (name.startsWith(prefix)) return tokens  // 首个命中的前缀即胜出，故上面数组的排列顺序决定了匹配结果
   }
   return DEFAULT_CONTEXT_WINDOW
 }

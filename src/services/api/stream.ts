@@ -76,17 +76,17 @@ export async function* streamAssistantTurn(
     }
 
     for (const fragment of delta.tool_calls ?? []) {
-      const slot = (partials[fragment.index] ??= { id: '', name: '', arguments: '' })
+      const slot = (partials[fragment.index] ??= { id: '', name: '', arguments: '' })  // 按分片自带的 index 定位槽位，没有就地新建：分片可能乱序到达，靠下标而非到达顺序归位
       if (fragment.id) slot.id = fragment.id
       if (fragment.function?.name) slot.name += fragment.function.name
-      if (fragment.function?.arguments) slot.arguments += fragment.function.arguments
+      if (fragment.function?.arguments) slot.arguments += fragment.function.arguments  // 参数是逐片拼接的 JSON 文本，拼完才是一个完整对象，因此中途不能解析
     }
   }
 
   const toolCalls: ToolCall[] = partials
-    .filter(slot => slot && slot.name)
+    .filter(slot => slot && slot.name)  // partials 按下标赋值可能留下空洞，故先滤掉空槽与没拿到名字的残片
     .map((slot, index) => ({
-      id: slot.id || `call_${index}`,
+      id: slot.id || `call_${index}`,  // 个别供应商不回传 id，用下标兜底，保证每个调用都有唯一 id 与之配对结果
       name: slot.name,
       arguments: slot.arguments || '{}',
     }))

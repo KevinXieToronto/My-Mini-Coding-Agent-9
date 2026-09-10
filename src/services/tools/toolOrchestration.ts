@@ -64,7 +64,7 @@ export function partitionToolCalls(calls: ToolCall[], byName: Map<string, Tool>)
     const safe = isSafe(call, byName)
     const last = batches.at(-1)
 
-    if (safe && last?.parallel) {
+    if (safe && last?.parallel) {  // 只有「当前调用安全」且「上一批也是并行批」才并入，于是合并的必然是相邻的安全调用
       last.calls.push(call)
     } else {
       batches.push({ calls: [call], parallel: safe })
@@ -87,13 +87,13 @@ export async function runWithConcurrency<T>(
   // 本函数：工作协程，不断领取下一个任务索引直到取完。
   async function worker(): Promise<void> {
     while (true) {
-      const index = next++
+      const index = next++  // 多个 worker 共享同一个游标领取任务；JS 单线程执行到此不会被打断，故自增是安全的
       if (index >= tasks.length) return
-      results[index] = await tasks[index]!()
+      results[index] = await tasks[index]!()  // 按任务原下标回填结果，因此完成先后不影响返回顺序
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()))
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()))  // 启动 min(上限, 任务数) 个 worker，即并发度；任务少于上限时不空转
   return results
 }
 
@@ -126,7 +126,7 @@ export function maxConcurrency(): number {
 // 本函数：由父上下文派生子代理上下文——独立的中断控制与读取状态，共享权限与文件历史。
 export function createSubagentContext(parent: ToolContext, agentId: string): ToolContext {
   const abortController = new AbortController()
-  parent.abortController.signal.addEventListener(
+  parent.abortController.signal.addEventListener(  // 父级中断向下转发到子代理；反向不转发，故子代理失败不会连累父回合
     'abort',
     () => abortController.abort(parent.abortController.signal.reason),
     { once: true },
@@ -136,7 +136,7 @@ export function createSubagentContext(parent: ToolContext, agentId: string): Too
     ...parent,
     abortController,
     readFileState: new Map(),
-    sessionAllow: new Set(parent.sessionAllow),
+    sessionAllow: new Set(parent.sessionAllow),  // 复制而非共享：子代理继承此刻的「总是允许」，但它的新增授权不会回流给父级
     agentId,
   }
 }

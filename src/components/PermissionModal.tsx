@@ -28,7 +28,7 @@ export function PermissionModal({ request }: { request: PermissionRequest }): Re
     const answer = input.toLowerCase()
     if (answer === 'y') request.resolve('yes')
     else if (answer === 'a') request.resolve('always')
-    else if (answer === 'n' || key.escape || key.return) request.resolve('no')
+    else if (answer === 'n' || key.escape || key.return) request.resolve('no')  // Esc 与直接回车都归入拒绝：误触与无意识确认都不该放行——失败即关闭
   })
 
   return (

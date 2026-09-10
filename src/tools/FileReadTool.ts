@@ -71,7 +71,7 @@ export const FileReadTool = buildTool({
     const raw = readFileSync(path, 'utf8')
     const allLines = raw.split(/\r?\n/)
 
-    const start = (input.offset ?? 1) - 1
+    const start = (input.offset ?? 1) - 1  // offset 对外是 1 起的行号，减 1 换成数组下标；缺省即从第一行开始
     const count = input.limit ?? MAX_LINES
     const slice = allLines.slice(start, start + count)
 
@@ -87,7 +87,7 @@ export const FileReadTool = buildTool({
     // 记住我们看过这个文件，以及当时的 mtime。
     ctx.readFileState.set(path, { timestamp: Date.now(), mtimeMs: stat.mtimeMs })
 
-    const omitted = allLines.length - (start + slice.length)
+    const omitted = allLines.length - (start + slice.length)  // 总行数减去「已输出到的位置」即剩余行数，据此提示模型用 offset 续读
     const footer = omitted > 0 ? `\n\n... ${omitted} more lines. Use offset to continue.` : ''
 
     if (raw.trim() === '') {

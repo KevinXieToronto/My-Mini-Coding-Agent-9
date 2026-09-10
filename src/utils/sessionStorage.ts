@@ -63,7 +63,7 @@ export function slugForCwd(cwd: string): string {
   return cwd
     .replace(/[\\/]/g, '-')
     .replace(/[^A-Za-z0-9._-]/g, '-')
-    .replace(/-+/g, '-')
+    .replace(/-+/g, '-')  // 三步依次：分隔符转连字符、非法字符转连字符、再把连续连字符压成一个
 }
 
 // 本函数：返回当前项目对应的会话记录目录。
@@ -119,7 +119,7 @@ export class SessionWriter {
       // ignore
       // 忽略
     }
-    this.lastUuid = entry.uuid
+    this.lastUuid = entry.uuid  // 本条 uuid 成为下一条的 parentUuid，JSONL 因而串成一条可回溯的链
     return entry
   }
 }
@@ -133,7 +133,7 @@ export function readTranscript(path: string): TranscriptEntry[] {
     throw new Error(`Transcript ${path} is larger than 50 MB; refusing to load.`)
   }
   const entries: TranscriptEntry[] = []
-  for (const line of readFileSync(path, 'utf8').split('\n')) {
+  for (const line of readFileSync(path, 'utf8').split('\n')) {  // JSONL 逐行独立解析：单行损坏只丢那一行，不会毁掉整份记录
     if (!line.trim()) continue
     try {
       entries.push(JSON.parse(line) as TranscriptEntry)
@@ -171,7 +171,7 @@ export function listSessions(cwd: string): SessionSummary[] {
             : '(empty)',
       }
     })
-    .filter(summary => summary.entryCount > 0)
+    .filter(summary => summary.entryCount > 0)  // 滤掉空记录文件——启动后没说过话就退出会留下这类空壳
     .sort((a, b) => b.updatedAt - a.updatedAt)
 }
 

@@ -62,7 +62,7 @@ export const GrepTool = buildTool({
   async execute(input, ctx) {
     const root = input.path ? toAbsolute(ctx.cwd, input.path) : ctx.cwd
     const viaRipgrep = tryRipgrep(input, root)
-    return viaRipgrep ?? scanInJs(input, root)
+    return viaRipgrep ?? scanInJs(input, root)  // ?? 而非 ||：ripgrep 只有在「不可用」时才返回 undefined，「零匹配」是有效结果不该触发兜底
   },
 })
 
@@ -89,7 +89,7 @@ function tryRipgrep(input: GrepInput, root: string): { result: string; data: unk
     const stdout = execFileSync('rg', args, {
       encoding: 'utf8',
       maxBuffer: 8_000_000,
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'ignore'],  // 丢弃 rg 的 stderr，只收 stdout；否则它的告警会混进搜索结果
     })
     return formatLines(stdout.split('\n').filter(Boolean), root, mode)
   } catch (error) {
@@ -109,7 +109,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
   const mode = input.output_mode ?? 'files_with_matches'
   let regex: RegExp
   try {
-    regex = new RegExp(input.pattern, input['-i'] ? 'i' : '')
+    regex = new RegExp(input.pattern, input['-i'] ? 'i' : '')  // 模型给的正则可能非法，在这里一次性编译并转成清晰报错，而不是逐文件失败
   } catch (error) {
     throw new Error(`Invalid regular expression: ${String(error)}`)
   }
@@ -131,7 +131,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
       if (buffer.length > MAX_FILE_BYTES) continue
       // A NUL byte in the first 8 KB is the usual binary heuristic.
       // 前 8 KB 内出现 NUL 字节，是判定二进制文件的常用启发式。
-      if (buffer.subarray(0, 8192).includes(0)) continue
+      if (buffer.subarray(0, 8192).includes(0)) continue  // 先按字节读入再判定，避免把二进制内容按 utf8 解码后污染结果
       content = buffer.toString('utf8')
     } catch {
       continue
@@ -152,7 +152,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
     } else if (mode === 'count') {
       lines.push(`${file.relative}:${hits.length}`)
     } else {
-      const emitted = new Set<number>()
+      const emitted = new Set<number>()  // 记录已输出的行号：相邻命中的上下文窗口会重叠，靠它去重
       for (const hit of hits) {
         for (let i = Math.max(0, hit - context); i <= Math.min(fileLines.length - 1, hit + context); i++) {
           if (emitted.has(i)) continue
@@ -182,7 +182,7 @@ function formatLines(
   mode: string,
 ): { result: string; data: unknown } {
   const shown = lines.slice(0, MAX_MATCHES)
-  const cleaned = shown.map(line => line.replace(root, '').replace(/^[\\/]/, ''))
+  const cleaned = shown.map(line => line.replace(root, '').replace(/^[\\/]/, ''))  // 削去绝对路径前缀与残留的分隔符，让输出与 JS 兜底路径的相对路径格式一致
   const footer = lines.length > shown.length ? `\n... truncated at ${MAX_MATCHES} lines` : ''
   return {
     result: cleaned.join('\n') + footer,

@@ -50,14 +50,14 @@ export async function connectServer(
 
   try {
     const transport =
-      'url' in config
+      'url' in config  // 配置里有 url 就走 HTTP 传输，否则按 stdio 起子进程——两种传输在此分流
         ? new StreamableHTTPClientTransport(new URL(config.url), {
             requestInit: { headers: config.headers },
           })
         : new StdioClientTransport({
             command: config.command,
             args: config.args ?? [],
-            env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
+            env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },  // 先铺开当前环境再叠加配置项，服务器既继承 PATH 等变量，又能被针对性覆盖
             // Discard the child's stderr. The SDK default is 'inherit', which
             // lets a chatty server print a banner — or a whole stack trace, if
             // it dies — straight into the Ink UI and scramble the screen. Our
@@ -191,7 +191,7 @@ function toMiniTool(
       // Defensive: MCP can return image and resource blocks, not just text. We
       // render a placeholder rather than crashing on a shape we did not handle.
       // 防御性处理：MCP 可返回图片与资源块，不只是文本。遇到未处理的形状就渲染占位符，而不是崩溃。
-      const text = (Array.isArray(response.content) ? response.content : [])
+      const text = (Array.isArray(response.content) ? response.content : [])  // 先确认是数组再遍历：服务器返回的形状不受我们控制，非数组时按空内容处理
         .map(block =>
           block && typeof block === 'object' && 'text' in block
             ? String((block as { text: unknown }).text)
@@ -205,7 +205,7 @@ function toMiniTool(
       const truncated =
         text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n... [truncated]` : text
 
-      if (response.isError) throw new Error(truncated || 'the MCP tool reported an error')
+      if (response.isError) throw new Error(truncated || 'the MCP tool reported an error')  // 远端的业务错误在此转成异常，由代理循环转成 tool_result 交还模型自行纠正
       return { result: truncated || '(no content)', data: { server: serverName } }
     },
   }) as unknown as Tool
@@ -223,7 +223,7 @@ function toMiniTool(
 // 本函数：给一个 Promise 加超时，超时后以带操作名的错误拒绝。
 function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms ${what}`)), ms)
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms ${what}`)), ms)  // 先兑现者胜出：Promise 一旦 settle 后续 reject 即无效，故超时与正常返回不会互相干扰
     promise.then(
       value => {
         clearTimeout(timer)
@@ -247,7 +247,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<
  */
 // 本函数：把 Promise 与 AbortSignal 竞速，signal 触发时立即以中止错误拒绝。
 function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(new Error('aborted'))
+  if (signal.aborted) return Promise.reject(new Error('aborted'))  // signal 早已触发时 abort 事件不会再来，故先行判定，否则将永远等下去
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(new Error('aborted'))
     signal.addEventListener('abort', onAbort, { once: true })

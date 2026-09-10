@@ -47,7 +47,7 @@ export class FileHistory {
    */
   // 本函数：记录指定文件在该回合改动前的内容快照。
   track(path: string, messageIndex: number): void {
-    if (this.checkpoints.some(c => c.path === path && c.messageIndex === messageIndex)) return
+    if (this.checkpoints.some(c => c.path === path && c.messageIndex === messageIndex)) return  // 同一回合内同一文件只留首次快照，后续编辑不再覆盖它
     this.checkpoints.push({
       path,
       content: existsSync(path) ? readFileSync(path, 'utf8') : undefined,
@@ -79,7 +79,7 @@ export class FileHistory {
   rewindTo(messageIndex: number): string[] {
     const toRestore = this.checkpoints
       .filter(c => c.messageIndex >= messageIndex)
-      .sort((a, b) => b.messageIndex - a.messageIndex)
+      .sort((a, b) => b.messageIndex - a.messageIndex)  // 按下标倒序恢复，于是同一文件最后落盘的是最早那份快照，即回退目标时刻的内容
 
     const restored = new Set<string>()
     for (const checkpoint of toRestore) {
@@ -102,7 +102,7 @@ export class FileHistory {
     this.checkpoints.splice(
       0,
       this.checkpoints.length,
-      ...this.checkpoints.filter(c => c.messageIndex < messageIndex),
+      ...this.checkpoints.filter(c => c.messageIndex < messageIndex),  // 就地保留回退点之前的快照、丢弃已消费的，数组引用不变故外部持有者仍然有效
     )
     return [...restored]
   }

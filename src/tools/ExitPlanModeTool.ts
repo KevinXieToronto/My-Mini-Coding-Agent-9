@@ -74,7 +74,7 @@ export const ExitPlanModeTool = buildTool({
     // Reaching execute() means the gate said allow, which means the human
     // approved. Flip the mode.
     // 能走到 execute() 就说明闸门放行、即人类已批准。切换模式。
-    ctx.permissions.mode = ctx.permissions.prePlanMode ?? 'default'
+    ctx.permissions.mode = ctx.permissions.prePlanMode ?? 'default'  // 恢复进入 plan 前的模式，没记录过则回落到 default，而不是停在 plan
     return {
       result:
         'The user approved the plan. Plan mode is off; you may now make changes. ' +

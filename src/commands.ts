@@ -29,11 +29,11 @@ export function getCommands(cwd: string): Command[] {
     ...loadCommandDir(join(homedir(), CONFIG_DIR_NAME, 'commands'), 'user'),
     ...loadCommandDir(join(cwd, CONFIG_DIR_NAME, 'commands'), 'project'),
   ]) {
-    byName.set(command.name, command)
+    byName.set(command.name, command)  // 同名后写覆盖先写，故遍历顺序（内置 → 用户 → 项目）就决定了谁最终生效
     for (const alias of command.aliases ?? []) byName.set(alias, command)
   }
 
-  return [...new Set(byName.values())]
+  return [...new Set(byName.values())]  // 一条命令会以正名与别名多次入表，用 Set 去重回同一批命令对象
 }
 
 // 本函数：按名字或别名查找命令。
@@ -51,7 +51,7 @@ export function findCommand(commands: Command[], name: string): Command | undefi
 export function parseCommandLine(line: string): { name: string; args: string } | undefined {
   if (!line.startsWith('/')) return undefined
   const trimmed = line.slice(1)
-  const space = trimmed.search(/\s/)
+  const space = trimmed.search(/\s/)  // 只按第一处空白切一刀：命令名在前，其余整段（含空格）都算参数
   return space === -1
     ? { name: trimmed, args: '' }
     : { name: trimmed.slice(0, space), args: trimmed.slice(space + 1).trim() }
@@ -113,7 +113,7 @@ export function splitFrontmatter(raw: string): {
   frontmatter: Record<string, unknown>
   body: string
 } {
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw)
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw)  // [\s\S] 用来跨行匹配，*? 非贪婪确保停在第一个结束的 ---，而不是文末的
   if (!match) return { frontmatter: {}, body: raw }
   try {
     const parsed = parseYaml(match[1]!) as Record<string, unknown> | null
@@ -131,5 +131,5 @@ export function substituteArguments(template: string, args: string): string {
   const words = args.split(/\s+/).filter(Boolean)
   return template
     .replace(/\$ARGUMENTS/g, args)
-    .replace(/\$(\d+)/g, (whole, index: string) => words[Number(index) - 1] ?? whole)
+    .replace(/\$(\d+)/g, (whole, index: string) => words[Number(index) - 1] ?? whole)  // $1 对应第 0 个词故减 1；越界时原样保留占位符，不产出 undefined
 }

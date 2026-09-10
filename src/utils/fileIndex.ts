@@ -90,7 +90,7 @@ export function walk(options: WalkOptions): WalkedFile[] {
   const queue: string[] = [cwd]
 
   while (queue.length > 0 && results.length < maxFiles) {
-    const dir = queue.shift()!
+    const dir = queue.shift()!  // 从队首取目录即广度优先：浅层文件先被收满，深层的大目录不会抢占名额上限
     let entries: string[]
     try {
       entries = readdirSync(dir)
@@ -115,7 +115,7 @@ export function walk(options: WalkOptions): WalkedFile[] {
       if (!rel) continue
       // ignore's API wants a trailing slash to recognise a directory rule.
       // ignore 的 API 需要结尾斜杠才能识别目录规则。
-      if (ig.ignores(stat.isDirectory() ? `${rel}/` : rel)) continue
+      if (ig.ignores(stat.isDirectory() ? `${rel}/` : rel)) continue  // 被忽略的目录直接不入队——剪枝而非逐个过滤其中的文件，这是遍历够快的关键
 
       if (stat.isDirectory()) {
         queue.push(full)

@@ -26,7 +26,7 @@ export function parseRule(
   behavior: RuleBehavior,
   source: RuleSource,
 ): PermissionRule | undefined {
-  const match = /^([A-Za-z_][\w-]*)(?:\((.*)\))?$/.exec(text.trim())
+  const match = /^([A-Za-z_][\w-]*)(?:\((.*)\))?$/.exec(text.trim())  // 捕获组 1 是工具名，可选的捕获组 2 是括号内的内容模式；括号整段可缺省，即「仅工具名」规则
   if (!match) return undefined
   return {
     toolName: match[1]!,
@@ -47,7 +47,7 @@ export function parseRules(
     ['deny', raw.deny],
     ['ask', raw.ask],
     ['allow', raw.allow],
-  ] as const) {
+  ] as const) {  // 按 deny → ask → allow 的顺序解析入库，使数组天然呈现「严格在前」的排列
     for (const text of list ?? []) {
       const rule = parseRule(text, behavior, source)
       if (rule) rules.push(rule)
@@ -93,16 +93,16 @@ function ruleMatches(rule: PermissionRule, tool: Tool, input: unknown, cwd: stri
       // Never vouch for syntax we do not model (subshells, backticks).
       // 对未建模的语法（子 shell、反引号）绝不担保。
       if (hasUnsupportedSyntax) return false
-      return parts.length > 0 && parts.every(part => commandMatches(rule.content!, part))
+      return parts.length > 0 && parts.every(part => commandMatches(rule.content!, part))  // allow 用「全部子命令都命中」：只要有一段没被授权，整条命令就不算获准
     }
-    return parts.some(part => commandMatches(rule.content!, part))
+    return parts.some(part => commandMatches(rule.content!, part))  // deny/ask 用「任一子命令命中」即可触发，量词与 allow 相反正是安全性所在
   }
 
   // File tools match on the path, as a glob relative to cwd.
   // 文件工具按相对 cwd 的路径 glob 匹配。
   const path = typeof record.file_path === 'string' ? record.file_path : undefined
   if (path) {
-    const relative = toPosixPath(toAbsolute(cwd, path)).replace(`${toPosixPath(cwd)}/`, '')
+    const relative = toPosixPath(toAbsolute(cwd, path)).replace(`${toPosixPath(cwd)}/`, '')  // 先转绝对路径再削去 cwd 前缀，得到统一的相对 posix 路径，规则里的 glob 才有稳定的匹配基准
     return picomatch(rule.content, { dot: true })(relative)
   }
 
@@ -149,7 +149,7 @@ function checkPathJail(
 
   const target = toAbsolute(context.cwd, raw)
   const roots = [context.cwd, ...context.additionalDirectories]
-  return roots.some(root => isInside(root, target)) ? undefined : { path: target }
+  return roots.some(root => isInside(root, target)) ? undefined : { path: target }  // 落在 cwd 或任一 --add-dir 目录内即放行；无一命中则返回越界路径
 }
 
 /**
@@ -221,7 +221,7 @@ export function evaluatePermission(tool: Tool, input: unknown, ctx: ToolContext)
     return { ...toolPolicy, reason: { type: 'toolPolicy' } }
   }
 
-  const readOnly = tool.isReadOnly?.(input) ?? false
+  const readOnly = tool.isReadOnly?.(input) ?? false  // 未声明只读的工具一律按「会改动」处理——失败即关闭
 
   // 4. Plan mode: nothing mutates — except the one tool whose whole job is to
   //    ask permission to leave plan mode.

@@ -49,10 +49,10 @@ export function findInstructionFiles(cwd: string): string[] {
   const chain: string[] = []
   let current = cwd
   while (true) {
-    chain.unshift(current)
+    chain.unshift(current)  // 自 cwd 逐级向上收集、每次插到队首，最终 chain 便是「根目录 → cwd」的顺序
     if (current === root) break
     const parent = dirname(current)
-    if (parent === current) break
+    if (parent === current) break  // dirname 到顶后会返回自身，以此兜底防止死循环
     current = parent
   }
 
@@ -76,7 +76,7 @@ export function loadProjectInstructions(cwd: string): string | undefined {
   if (files.length === 0) return undefined
 
   const sections = files.map(file => {
-    const body = expandImports(readFileSync(file, 'utf8'), dirname(file), 0, new Set([file]))
+    const body = expandImports(readFileSync(file, 'utf8'), dirname(file), 0, new Set([file]))  // seen 以自身为初值，文件 @ 导入自己时即被挡下
     return `## From ${toDisplayPath(cwd, file)}\n\n${body.trim()}`
   })
 
@@ -98,9 +98,9 @@ export function loadProjectInstructions(cwd: string): string | undefined {
 function expandImports(text: string, baseDir: string, depth: number, seen: Set<string>): string {
   if (depth >= MAX_IMPORT_DEPTH) return text
 
-  return text.replace(/^@([^\s]+)\s*$/gm, (whole, relativePath: string) => {
+  return text.replace(/^@([^\s]+)\s*$/gm, (whole, relativePath: string) => {  // m 标志让 ^$ 按行匹配，故只有独占一行的 @路径 才算导入，正文里提到的 @ 不受影响
     const target = toAbsolute(baseDir, relativePath)
-    if (seen.has(target) || !existsSync(target)) return whole
+    if (seen.has(target) || !existsSync(target)) return whole  // 已展开过或文件不存在时原样返回该行，循环导入因而只展开一次便终止
     seen.add(target)
     const body = readFileSync(target, 'utf8')
     return expandImports(body, dirname(target), depth + 1, seen)
@@ -211,7 +211,7 @@ export function expandUserMentions(text: string, cwd: string): string {
     const path = toAbsolute(cwd, match[1]!)
     if (!existsSync(path)) continue
     try {
-      const body = readFileSync(path, 'utf8').slice(0, 20_000)
+      const body = readFileSync(path, 'utf8').slice(0, 20_000)  // 每个被提及的文件最多附 20 KB，避免一句 @ 就吃掉整个上下文窗口
       attachments.push(`### ${match[1]}\n\n\`\`\`\n${body}\n\`\`\``)
     } catch {
       // A directory or an unreadable file: leave the mention as plain text.

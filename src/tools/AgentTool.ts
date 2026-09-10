@@ -116,10 +116,10 @@ export function createAgentTool(deps: AgentToolDeps) {
       // A read-only sub-agent is confined by plan mode, whatever the parent is in.
       // 只读子代理一律被 plan 模式约束，无论父级处于什么模式。
       if (type === 'explore') {
-        childCtx.permissions = { ...childCtx.permissions, mode: 'plan' }
+        childCtx.permissions = { ...childCtx.permissions, mode: 'plan' }  // 只改子上下文的模式副本，父级模式不受影响；explore 型子代理因此被钉死在只读
       }
 
-      const tools = deps.getTools().filter(tool => !DISALLOWED_FOR_SUBAGENTS.has(tool.name))
+      const tools = deps.getTools().filter(tool => !DISALLOWED_FOR_SUBAGENTS.has(tool.name))  // 剔除 Agent 自身以断掉无限递归，同时剔除 ExitPlanMode（子代理没有可批准计划的用户）
 
       const { text, turns } = await deps.runNestedQuery({
         messages: [{ role: 'user', content: input.prompt }],

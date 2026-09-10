@@ -213,7 +213,7 @@ export function buildTool<Schema extends z.ZodType>(
     isReadOnly: () => false,
     isConcurrencySafe: () => false,
     checkPermissions: () => ({ behavior: 'allow' as const }),
-    ...definition,
+    ...definition,  // 展开在默认值之后：工具自己声明过的字段覆盖默认，没声明的才落到上面的保守值
   }
 }
 
@@ -234,7 +234,7 @@ export function toApiTools(tools: Tool[]): OpenAI.Chat.Completions.ChatCompletio
       parameters:
         tool.jsonSchemaOverride ??
         (zodToJsonSchema(tool.inputSchema, {
-          $refStrategy: 'none',
+          $refStrategy: 'none',  // 禁用 $ref 展开为内联结构：模型对扁平 schema 的遵循度远高于带引用的
           target: 'openAi',
         }) as Record<string, unknown>),
     },

@@ -52,7 +52,7 @@ export function resolveBash(): string | null {
     process.env.LOCALAPPDATA && `${process.env.LOCALAPPDATA}\\Programs\\Git\\bin\\bash.exe`,
   ].filter((path): path is string => Boolean(path))
 
-  return candidates.find(path => existsSync(path)) ?? null
+  return candidates.find(path => existsSync(path)) ?? null  // 按候选顺序取第一个真实存在的路径；环境变量为空的候选项已在上面被滤掉
 }
 
 const BASH_NOT_FOUND =
@@ -119,7 +119,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
 
     // 本函数：把一段输出追加到 stdout/stderr，总量超上限则只记截断标记。
     const append = (target: 'out' | 'err', chunk: string): void => {
-      if (stdout.length + stderr.length > MAX_OUTPUT_CHARS) {
+      if (stdout.length + stderr.length > MAX_OUTPUT_CHARS) {  // 按两股输出的总量设限，只置标记不再累积，内存与上下文都不会被长日志撑爆
         truncated = true
         return
       }
@@ -146,7 +146,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
     // 本函数：收尾——清理定时器与监听器，并兑现结果。
     const finish = (exitCode: number | null): void => {
       clearTimeout(timer)
-      signal.removeEventListener('abort', onAbort)
+      signal.removeEventListener('abort', onAbort)  // 结算时摘掉监听器，避免长会话中一次次调用累积泄漏
       resolve({ stdout, stderr, exitCode, timedOut, truncated })
     }
 
@@ -169,7 +169,7 @@ export function formatShellResult(result: ShellResult): string {
   if (result.stderr.trim()) parts.push(`[stderr]\n${result.stderr.trimEnd()}`)
   if (result.truncated) parts.push(`[output truncated at ${MAX_OUTPUT_CHARS} characters]`)
   if (result.timedOut) parts.push('[command timed out and was killed]')
-  if (result.exitCode !== 0 && result.exitCode !== null) {
+  if (result.exitCode !== 0 && result.exitCode !== null) {  // null 表示被杀（超时或中断），已由上面的提示说明，不再重复报退出码
     parts.push(`[exit code ${result.exitCode}]`)
   }
   return parts.length > 0 ? parts.join('\n') : '[no output, exit code 0]'

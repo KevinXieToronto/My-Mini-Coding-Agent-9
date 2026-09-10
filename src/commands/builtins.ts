@@ -108,7 +108,7 @@ export function makeRewindCommand(fileHistory: FileHistory): Command {
     async call(args, ctx) {
       const turns = Number(args || '1')
       const target = rewindTarget(ctx.messages, Number.isFinite(turns) ? turns : 1)
-      const files = fileHistory.rewindTo(target)
+      const files = fileHistory.rewindTo(target)  // 先还原文件再截断消息：只退消息不退文件，会得到与工作区矛盾的对话
       ctx.setMessages(ctx.messages.slice(0, target))
       return {
         type: 'text',
@@ -132,7 +132,7 @@ export function rewindTarget(messages: Message[], turns: number): number {
   const userIndexes = messages
     .map((message, index) => (message.role === 'user' ? index : -1))
     .filter(index => index >= 0)
-  const target = userIndexes[userIndexes.length - turns]
+  const target = userIndexes[userIndexes.length - turns]  // 倒数第 turns 条用户消息的下标即截断点；越界时下一行退回 0，即回到开头
   return target ?? 0
 }
 
@@ -159,7 +159,7 @@ const model: Command = {
   async call(args, ctx) {
     if (!args) return { type: 'text', text: `Current model: ${ctx.settings.model}` }
     const save = /(^|\s)--save(\s|$)/.test(args)
-    const name = args.replace(/(^|\s)--save(\s|$)/, ' ').trim()
+    const name = args.replace(/(^|\s)--save(\s|$)/, ' ').trim()  // 把 --save 从参数里剔掉，余下的才是模型名；两侧的空白捕获用于避免粘连
     if (!name) return { type: 'text', text: `Current model: ${ctx.settings.model}` }
     ctx.settings.model = name
     // Persisting is opt-in: a one-off experiment should not rewrite settings.

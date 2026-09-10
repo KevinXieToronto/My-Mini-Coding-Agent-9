@@ -199,7 +199,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
         setPermission({
           message,
           toolName: tool.name,
-          resolve: answer => {
+          resolve: answer => {  // 把弹窗按键结果兑现给 canUseTool 的 Promise，代理循环正停在那个 await 上等它
             setPermission(undefined)
             if (answer === 'always') sessionRef.current.sessionAllow.add(tool.name)
             resolve(answer !== 'no')
@@ -236,7 +236,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
           systemPrompt: systemPromptRef.current,
           appState: sessionRef.current.appState,
           setMessages: next => {
-            messagesRef.current.splice(0, messagesRef.current.length, ...next)
+            messagesRef.current.splice(0, messagesRef.current.length, ...next)  // 就地替换而非重新赋值：query 循环持有的是同一个数组引用，换引用它就看不见了
             setEntries(entriesFromMessages(messagesRef.current))
           },
           notify: notice => setEntries(previous => [...previous, { kind: 'notice', text: notice }]),
@@ -258,7 +258,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
             // The permission engine reads its own context, not Settings, so a
             // /mode change has to be mirrored across for it to take effect.
             // 权限引擎读的是自己的上下文而非 Settings，/mode 的改动需同步过去才生效。
-            sessionRef.current.permissions.mode = settings.permissionMode
+            sessionRef.current.permissions.mode = settings.permissionMode  // 放在 finally 里：无论命令成功还是抛错，模式改动都要同步到权限上下文
             setBusy(false)
           }
           return
@@ -298,7 +298,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
       // @path mentions are expanded for the MODEL only; the transcript keeps
       // showing what the user actually typed.
       // @path 提及只为模型展开；转录里仍显示用户实际输入的文本。
-      const expanded = expandUserMentions(effectiveText, sessionRef.current.cwd)
+      const expanded = expandUserMentions(effectiveText, sessionRef.current.cwd)  // 展开结果只进消息列表，不回写转录，故界面上仍是用户敲下的原文
       const userMessage: Message = {
         role: 'user',
         content: submitted.additionalContext
@@ -321,7 +321,7 @@ ${submitted.additionalContext}
           messages: messagesRef.current,
           settings,
           tools: toolsRef.current,
-          toolContext: { ...sessionRef.current, abortController },
+          toolContext: { ...sessionRef.current, abortController },  // 会话级上下文加上本回合专属的中断控制器，拼成完整 ToolContext
           systemPrompt: systemPromptRef.current,
           canUseTool,
           onMessage: message => writerRef.current.append(message),
@@ -481,7 +481,7 @@ function describeTerminal(terminal: Terminal): string {
 // 本函数：惰性 ref——初值只在首次渲染时计算一次，避免每次渲染重复执行昂贵的构建。
 function useLazyRef<T>(make: () => T): React.MutableRefObject<T> {
   const ref = useRef<T | undefined>(undefined)
-  if (ref.current === undefined) ref.current = make()
+  if (ref.current === undefined) ref.current = make()  // 只在首帧 make 求值一次；写成 useRef(make()) 则每次渲染都会执行 make
   return ref as React.MutableRefObject<T>
 }
 
@@ -510,13 +510,13 @@ type DriveParams = {
  */
 // 本函数：驱动 query 生成器，把事件分发成 React 状态更新，并返回回合终态。
 async function drive(params: DriveParams): Promise<Terminal> {
-  const { setEntries, setStreamingText, onUsage, ...queryParams } = params
+  const { setEntries, setStreamingText, onUsage, ...queryParams } = params  // 解构剥掉 UI 专属回调，余下的正好是 query 需要的参数，UI 关注点不渗进循环
   const iterator = query(queryParams)
   const toolsByName = new Map(params.tools.map(tool => [tool.name, tool]))
 
   while (true) {
     const step = await iterator.next()
-    if (step.done) return step.value
+    if (step.done) return step.value  // 生成器 done 时 value 才是 Terminal 终值，事件则来自未完成的每一步
     const event = step.value
 
     switch (event.type) {
@@ -537,7 +537,7 @@ async function drive(params: DriveParams): Promise<Terminal> {
       case 'assistant_message': {
         const text = event.message.role === 'assistant' ? event.message.content : ''
         if (event.usage) onUsage(event.usage)
-        setStreamingText('')
+        setStreamingText('')  // 清空流式文本与下一行的追加同处一个 React 批次，故切到定稿文本时不会闪烁
         if (text.trim()) setEntries(previous => [...previous, { kind: 'assistant', text }])
         break
       }
@@ -557,7 +557,7 @@ async function drive(params: DriveParams): Promise<Terminal> {
         setEntries(previous =>
           previous.map(entry =>
             entry.kind === 'tool' && entry.id === event.call.id
-              ? { ...entry, card: finishCard(entry.card, event, tool) }
+              ? { ...entry, card: finishCard(entry.card, event, tool) }  // 按调用 id 定位那张卡片就地更新，其余条目保持原对象引用以免整列重渲染
               : entry,
           ),
         )

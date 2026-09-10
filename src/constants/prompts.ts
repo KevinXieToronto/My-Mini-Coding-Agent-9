@@ -114,11 +114,11 @@ ${context.projectInstructions}`,
 
 // 本函数：拼出完整系统提示词——静态块、边界标记、动态块，顺序不可颠倒。
 export function getSystemPrompt(tools: Tool[], context: DynamicContext): string {
-  return [...staticBlocks(tools), DYNAMIC_BOUNDARY, ...dynamicBlocks(context)].join('\n\n')
+  return [...staticBlocks(tools), DYNAMIC_BOUNDARY, ...dynamicBlocks(context)].join('\n\n')  // 静态块在前、动态块在后：前缀逐字不变，服务商的提示词缓存才命中得上
 }
 
 // 本函数：取一段描述的首句，用于在工具清单里给出一行摘要。
 function firstSentence(text: string): string {
-  const end = text.indexOf('. ')
+  const end = text.indexOf('. ')  // 找「句点加空格」而非单个句点，避免在 e.g. 或版本号处截断
   return end === -1 ? text : text.slice(0, end + 1)
 }

@@ -53,7 +53,7 @@ export function toApiMessages(messages: Message[]): ApiMessage[] {
       case 'assistant':
         out.push({
           role: 'assistant',
-          content: message.content || null,
+          content: message.content || null,  // 只带工具调用、没有文本时必须发 null 而非空串，否则部分供应商会判为非法请求
           ...(message.toolCalls?.length
             ? {
                 tool_calls: message.toolCalls.map(call => ({

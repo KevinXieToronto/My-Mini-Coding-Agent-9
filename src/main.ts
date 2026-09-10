@@ -97,7 +97,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
     './services/mcp/client.js'
   )
   const { loadMcpConfig } = await import('./services/mcp/config.js')
-  const connections = await connectAll(loadMcpConfig(process.cwd()))
+  const connections = await connectAll(loadMcpConfig(process.cwd()))  // 在 UI 挂载前完成连接，MCP 工具才能出现在第一次请求里
   const mcp = {
     tools: connections.flatMap(connection => connection.tools),
     instructions: renderMcpInstructions(connections),
@@ -111,7 +111,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
   // argument as for hooks in Ch.16.
   // print 模式同样吃这些服务器：只在有人盯着时才存在的能力，脚本无法依赖——
   // 与第 16 章为钩子所持的理由相同。
-  if (opts.print !== undefined || !process.stdin.isTTY) {
+  if (opts.print !== undefined || !process.stdin.isTTY) {  // 显式 -p，或压根没有 TTY（管道、CI），都走非交互路径——Ink 无终端启动不了
     const { runPrintMode } = await import('./cli/print.js')
     try {
       await runPrintMode(settings, permissionContext, opts.print, mcp)
@@ -127,7 +127,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
     import('./screens/REPL.js'),
   ])
   const instance = render(createElement(REPL, { settings, resume, mcp }))
-  await instance.waitUntilExit()
+  await instance.waitUntilExit()  // 阻塞到 Ink 退出，下一行的断开清理才不会在界面还活着时就执行
   // A stdio server is a child process. Skip this and every session leaves an
   // orphan behind.
   // stdio 服务器是子进程。跳过这一步，每次会话都会留下孤儿进程。

@@ -67,7 +67,7 @@ export function loadSkills(cwd: string): Skill[] {
     if (!existsSync(dir)) continue
     for (const entry of readdirSync(dir)) {
       const skillFile = join(dir, entry, 'SKILL.md')
-      if (!existsSync(skillFile) || !statSync(join(dir, entry)).isDirectory()) continue
+      if (!existsSync(skillFile) || !statSync(join(dir, entry)).isDirectory()) continue  // 技能必须是「目录 + 其中的 SKILL.md」，散落的 md 文件与空目录都不算
       try {
         const skill = parseSkill(skillFile, entry, source)
         // Project skills override user skills of the same name.
@@ -127,7 +127,7 @@ export function visibleSkills(skills: Skill[], touchedPaths: Iterable<string>): 
   const touched = [...touchedPaths]
   return skills.filter(skill => {
     if (!skill.paths?.length) return true
-    const isMatch = picomatch(skill.paths, { dot: true })
+    const isMatch = picomatch(skill.paths, { dot: true })  // paths 可给多个 glob，picomatch 接受数组，命中任一即视为相关
     return touched.some(path => isMatch(path))
   })
 }
@@ -147,6 +147,6 @@ export function renderSkillsSection(skills: Skill[]): string {
     'call the Skill tool with its name FIRST — before starting the work — and follow',
     'what it says in place of your default approach.',
     '',
-    ...skills.map(skill => `- ${skill.name}: ${skill.description}`),
+    ...skills.map(skill => `- ${skill.name}: ${skill.description}`),  // 只写名称与描述：正文留在磁盘，等模型调用 Skill 工具时才加载——这就是渐进式披露
   ].join('\n')
 }

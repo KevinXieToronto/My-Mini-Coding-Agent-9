@@ -56,10 +56,10 @@ const McpConfigSchema = z.object({
 export function loadMcpConfig(cwd: string): Record<string, McpServerConfig> {
   const servers: Record<string, McpServerConfig> = {}
 
-  for (const path of [join(homedir(), CONFIG_DIR_NAME, 'mcp.json'), join(cwd, '.mcp.json')]) {
+  for (const path of [join(homedir(), CONFIG_DIR_NAME, 'mcp.json'), join(cwd, '.mcp.json')]) {  // 用户级在前、项目级在后地逐个读取；后读到的同名服务器覆盖先前的
     if (!existsSync(path)) continue
     try {
-      const parsed = McpConfigSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')))
+      const parsed = McpConfigSchema.safeParse(JSON.parse(readFileSync(path, 'utf8')))  // JSON.parse 会抛异常（由外层 try 兜住），safeParse 则不抛、用 success 标志报告校验结果
       if (!parsed.success) {
         console.error(`[mini-cc] ignoring malformed MCP config at ${path}`)
         continue
