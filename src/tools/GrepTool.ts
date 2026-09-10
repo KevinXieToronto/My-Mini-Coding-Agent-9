@@ -138,9 +138,9 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
     }
 
     const fileLines = content.split(/\r?\n/)
-    const hits: number[] = []
+    const hits: number[] = []  // 先收齐命中行号再统一输出：上下文模式需要知道相邻命中的位置才能合并重叠窗口
     for (let i = 0; i < fileLines.length; i++) {
-      if (regex.test(fileLines[i]!)) hits.push(i)
+      if (regex.test(fileLines[i]!)) hits.push(i)  // 正则未带 g 标志，故 test 不会推进 lastIndex，可安全地跨行反复调用
     }
     if (hits.length === 0) continue
 
@@ -162,7 +162,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
         }
       }
     }
-    if (lines.length >= MAX_MATCHES) break
+    if (lines.length >= MAX_MATCHES) break  // 攒够上限就整体停止遍历，而不是走完全树再截断——省下的是剩余文件的读盘开销
   }
 
   if (lines.length === 0) return { result: 'No matches found.', data: { files: 0, matches: 0 } }

@@ -19,7 +19,7 @@ import type { Tokens } from 'marked'
 // 本函数：把 Markdown 源文本渲染为单个 ANSI 字符串。
 export function renderMarkdown(source: string): string {
   const tokens = marked.lexer(source)
-  return tokens.map(renderToken).join('').trimEnd()
+  return tokens.map(renderToken).join('').trimEnd()  // 每个块级 token 都以两个换行收尾，故整体拼完要 trimEnd，否则消息末尾会拖出空行
 }
 
 // 本函数：按 token 类型渲染单个块级节点，未知类型退化为纯文本。

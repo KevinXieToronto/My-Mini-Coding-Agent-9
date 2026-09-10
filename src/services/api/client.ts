@@ -18,7 +18,7 @@ let client: OpenAI | undefined
 
 // 本函数：惰性创建并缓存客户端，校验 API Key 并支持自定义 baseURL。
 export function getClient(settings: Settings): OpenAI {
-  if (client) return client
+  if (client) return client  // 单例缓存，连接池得以复用；也因此 settings 只在首次调用时生效，改动后须先 resetClient()
 
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {

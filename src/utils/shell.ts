@@ -101,7 +101,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
   const [file, args] =
     shell === 'bash'
       ? [bashPath as string, ['-c', command]]
-      : ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command]]
+      : ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command]]  // -NoProfile 跳过用户配置以免污染环境，-NonInteractive 让任何提示直接报错而不是把我们挂住
 
   return new Promise<ShellResult>(resolve => {
     const child = spawn(file, args, {
@@ -132,7 +132,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
     child.stdout.on('data', chunk => append('out', String(chunk)))
     child.stderr.on('data', chunk => append('err', String(chunk)))
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(() => {  // 先置标记再杀进程：随后的 close 事件才知道这次退出是超时所致，而非命令自己失败
       timedOut = true
       child.kill('SIGKILL')
     }, timeoutMs)
@@ -150,11 +150,11 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
       resolve({ stdout, stderr, exitCode, timedOut, truncated })
     }
 
-    child.on('error', error => {
+    child.on('error', error => {  // spawn 本身失败（可执行文件不存在等），把原因并进 stderr 交给模型，退出码用 null 表示「没跑起来」
       stderr += `\nFailed to start ${file}: ${error.message}`
       finish(null)
     })
-    child.on('close', code => finish(code))
+    child.on('close', code => finish(code))  // error 之后通常还会再来一次 close，但 Promise 只兑现一次，重复调用无害
   })
 }
 

@@ -129,7 +129,7 @@ export function getToolsWithAgent(
       })
 
       let turns = 0
-      while (true) {
+      while (true) {  // messages 被 query 就地追加，故循环结束后子代理的完整对话就躺在这个数组里，供下面取末条回报
         const step = await iterator.next()  // 手动驱动生成器并丢弃沿途事件：子代理的过程不进父级转录，只有终值有用
         if (step.done) {
           turns = step.value.turns

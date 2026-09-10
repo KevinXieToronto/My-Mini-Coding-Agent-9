@@ -81,7 +81,7 @@ export function snipOldToolResults(messages: Message[]): Message[] {
     if (message.content.length <= SNIP_THRESHOLD_CHARS) return message
     return {
       ...message,
-      content:
+      content:  // 留头不留尾，并写明省略了多少字符：模型据此知道这里曾有内容，可自行决定是否重跑该调用
         `${message.content.slice(0, SNIP_KEEP_CHARS)}\n` +
         `... [${message.content.length - SNIP_KEEP_CHARS} characters snipped to save context]`,
     }
@@ -131,7 +131,7 @@ export async function compactConversation(
   const cutoff = Math.max(0, snipped.length - KEEP_TAIL)
   const head = snipped.slice(0, cutoff)
   const tail = snipped.slice(cutoff)
-  if (head.length === 0) {
+  if (head.length === 0) {  // 全部消息都落在末尾保留区内，已无可总结之物；method 记为 'none' 以示这次压缩什么也没做
     return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'none' }
   }
 
@@ -193,8 +193,8 @@ export async function compactConversation(
 export function summaryBudget(model: string): number {
   const window = contextWindowFor(model)
   return Math.max(
-    1_000,
-    Math.floor((window - SUMMARY_OUTPUT_TOKENS - estimateTokens(SUMMARY_PROMPT)) * ESTIMATE_SLACK),
+    1_000,  // 兜底下限，避免小窗口模型算出零或负数预算，那会让 headWithinBudget 一条都取不到
+    Math.floor((window - SUMMARY_OUTPUT_TOKENS - estimateTokens(SUMMARY_PROMPT)) * ESTIMATE_SLACK),  // 窗口先扣掉摘要输出与提示词本身，再乘 0.9 兜住我们估算偏低的那几个百分点
   )
 }
 

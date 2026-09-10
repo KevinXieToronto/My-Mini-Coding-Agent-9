@@ -37,7 +37,7 @@ const READ_ONLY_PREFIXES = [
 // 本函数：按 && || ; | 切分命令串，返回去空的子命令列表。
 export function splitCommand(command: string): string[] {
   return command
-    .split(/&&|\|\||;|\|/)
+    .split(/&&|\|\||;|\|/)  // 交替分支里 `\|\|` 必须排在 `\|` 之前，否则 `||` 会被当成两个管道，切出一个空段
     .map(part => part.trim())
     .filter(Boolean)
 }
@@ -45,7 +45,7 @@ export function splitCommand(command: string): string[] {
 // 本函数：判断整条命令是否只读——每个子命令都必须命中只读前缀名单。
 export function isReadOnlyCommand(command: string): boolean {
   const parts = splitCommand(command)
-  if (parts.length === 0) return false
+  if (parts.length === 0) return false  // 空命令不算只读：every 对空数组恒为 true，这里先行拦下，免得空串一路被放行
   // EVERY subcommand must be read-only, or the whole thing is not.
   // 必须「每个」子命令都只读，否则整条命令都不算只读。
   return parts.every(part => READ_ONLY_PREFIXES.some(prefix => isPrefixOf(prefix, part)))
@@ -58,7 +58,7 @@ export function isReadOnlyCommand(command: string): boolean {
 // 本函数：按词边界判断 prefix 是否为 command 的命令前缀。
 function isPrefixOf(prefix: string, command: string): boolean {
   if (command === prefix) return true
-  return command.startsWith(`${prefix} `)
+  return command.startsWith(`${prefix} `)  // 要求前缀后必须跟空格，于是 `git log` 命中 `git log --oneline` 却命中不了 `git logout`
 }
 
 const schema = z.strictObject({

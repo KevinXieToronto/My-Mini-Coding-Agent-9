@@ -52,7 +52,7 @@ export function matcherApplies(
   if (ruleMatch) {
     if (ruleMatch[1] !== toolName) return false
     const record = (input ?? {}) as Record<string, unknown>
-    const subject =
+    const subject =  // 与权限引擎取同一个「主体」：shell 类看 command，文件类看 file_path，都没有就拿空串去匹配（几乎必然不命中）
       typeof record.command === 'string'
         ? record.command
         : typeof record.file_path === 'string'
@@ -126,11 +126,11 @@ export function runHook(hook: HookCommand, payload: HookInput, cwd: string): Pro
 // 本函数：把钩子的 stdout 解析成 HookOutput，非 JSON 一律视为「无意见」返回空对象。
 export function parseHookOutput(stdout: string): HookOutput {
   const trimmed = stdout.trim()
-  if (!trimmed.startsWith('{')) return {}
+  if (!trimmed.startsWith('{')) return {}  // 先看首字符再解析：格式化钩子往往打印一堆日志，直接 JSON.parse 只会白抛一次异常
   try {
     return JSON.parse(trimmed) as HookOutput
   } catch {
-    return {}
+    return {}  // 解析失败也当「无意见」，绝不因此拦下调用——写坏的钩子不该改变授权结果
   }
 }
 
@@ -146,7 +146,7 @@ export function parseHookOutput(stdout: string): HookOutput {
 function selectHooks(config: HooksConfig, event: HookEvent, payload: HookInput): HookCommand[] {
   const selected: HookCommand[] = []
   for (const entry of config[event] ?? []) {
-    const applies =
+    const applies =  // 负载里没有 tool_name 就说明这不是工具类事件（Stop、SessionStart 等），匹配器无从谈起，一律视为适用
       payload.tool_name === undefined ||
       matcherApplies(entry.matcher, payload.tool_name, payload.tool_input)
     if (applies) selected.push(...entry.hooks)
@@ -243,7 +243,7 @@ export async function runContextHooks(
     if (output.additionalContext) parts.push(output.additionalContext)
     if (output.continue === false) {
       return {
-        additionalContext: parts.length ? parts.join('\n') : undefined,
+        additionalContext: parts.length ? parts.join('\n') : undefined,  // 即便被拦下也把此前钩子已注入的文本带回：那是解释「为何被拦」的线索，不该一并丢掉
         blocked: true,
         reason: output.stopReason,
       }

@@ -128,6 +128,8 @@ export function buildPermissionContext(
   cwd: string,
   overrides: { mode?: PermissionMode; addDirs?: string[] } = {},
 ): PermissionContext {
+  // 这里重新读盘而不复用 loadSettings 合并后的 permissions：合并会抹掉规则出自哪个文件，
+  // 而判定理由要向用户报出来源（"blocked by … (projectSettings)"），故必须分开解析。
   const userRaw = readJSONIfExists(userSettingsPath()).permissions
   const projectRaw = readJSONIfExists(projectSettingsPath(cwd)).permissions
   return {
@@ -139,7 +141,7 @@ export function buildPermissionContext(
     additionalDirectories: [
       ...(settings.additionalDirectories ?? []),
       ...(overrides.addDirs ?? []),
-    ].map(dir => resolve(cwd, dir)),
+    ].map(dir => resolve(cwd, dir)),  // 统一解析成绝对路径：路径沙箱靠前缀比对判断越界，相对路径会让比对失效
     cwd,
   }
 }
@@ -147,7 +149,7 @@ export function buildPermissionContext(
 // 本函数：把补丁合并进用户级设置并写回磁盘。
 export function saveUserSettings(patch: Partial<Settings>): void {
   mkdirSync(userConfigDir(), { recursive: true })
-  const merged = { ...readJSONIfExists(userSettingsPath()), ...patch }
+  const merged = { ...readJSONIfExists(userSettingsPath()), ...patch }  // 先读回盘上现值再让补丁覆盖，于是本次没提到的字段原样保留，不会被整份写没
   writeFileSync(userSettingsPath(), JSON.stringify(merged, null, 2) + '\n', 'utf8')
 }
 

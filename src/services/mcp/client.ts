@@ -93,6 +93,7 @@ export async function connectAll(
 ): Promise<McpConnection[]> {
   // Connect in parallel: startup latency is the sum otherwise.
   // 并行连接：否则启动延迟就是各家之和。
+  // 这里敢用 Promise.all 而非 allSettled，是因为 connectServer 自己把失败收进了 error 字段、从不抛出
   return Promise.all(Object.entries(servers).map(([name, config]) => connectServer(name, config)))
 }
 
@@ -166,7 +167,7 @@ function toMiniTool(
     name: namespacedName(serverName, remote.name),
     description: (
       remote.description ?? `The ${remote.name} tool from the ${serverName} MCP server.`
-    ).slice(0, 2000),
+    ).slice(0, 2000),  // 远端描述长度不受我们控制，硬性截断，免得一台啰嗦的服务器独占系统提示词
     // Passthrough: the server owns validation. We only guarantee it is an object.
     // 放行式：校验归服务器。我们只保证它是个对象。
     inputSchema: z.record(z.unknown()),

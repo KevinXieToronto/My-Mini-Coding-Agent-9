@@ -46,6 +46,7 @@ export function createSkillTool(getSkills: () => Skill[]) {
       return data ? `loaded (~${data.tokens} tokens)` : 'loaded'
     },
 
+    // 本函数：调用前先核对技能名，并在报错里列出全部可选名——模型据此自行纠正，不必人类介入。
     validateInput(input) {
       const names = getSkills().map(skill => skill.name)
       if (!names.includes(input.skill)) {
@@ -57,8 +58,9 @@ export function createSkillTool(getSkills: () => Skill[]) {
       return { ok: true }
     },
 
+    // 本函数：把技能正文连同参数与建议工具拼成一段文本返回，此刻才把正文放进上下文。
     async execute(input) {
-      const skill = getSkills().find(candidate => candidate.name === input.skill)!
+      const skill = getSkills().find(candidate => candidate.name === input.skill)!  // 非空断言成立：validateInput 已确认名字在列表内，走到这里必然找得到
       const header = `# Skill: ${skill.name}`
       const argsLine = input.args ? `\nArguments: ${input.args}` : ''
       const toolsLine = skill.allowedTools?.length

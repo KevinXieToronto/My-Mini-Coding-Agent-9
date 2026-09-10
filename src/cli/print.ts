@@ -43,7 +43,7 @@ export async function runPrintMode(
   // 下游脚本不该被迫从中过滤我们的诊断信息。
   for (const failure of mcp?.failures ?? []) console.error(failure)
 
-  const text = prompt ?? (await readAllStdin())
+  const text = prompt ?? (await readAllStdin())  // -p 的参数优先；没给才去读 stdin，于是「参数」与「管道」两条入口共用同一段后续逻辑
   if (!text.trim()) {
     stdout.write('No prompt given. Use -p "your prompt", or pipe text on stdin.\n')
     return

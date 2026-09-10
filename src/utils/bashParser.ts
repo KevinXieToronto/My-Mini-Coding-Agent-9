@@ -55,13 +55,13 @@ export function parseCommand(command: string): ParsedCommand {
       continue
     }
 
-    if (quote) {
+    if (quote) {  // 引号内的字符一律原样收下，直到遇见同款引号才闭合；期间的 && ; | 都不算分隔符
       current += char
       if (char === quote) quote = undefined
       continue
     }
 
-    if (char === '"' || char === "'") {
+    if (char === '"' || char === "'") {  // 记住是哪种引号：单引号只能被单引号闭合，双引号只能被双引号闭合
       quote = char
       current += char
       continue
@@ -102,9 +102,9 @@ export function parseCommand(command: string): ParsedCommand {
 
   if (quote) hasUnsupportedSyntax = true // unbalanced quote
   // 引号不闭合
-  parts.push(current.trim())
+  parts.push(current.trim())  // 循环结束时缓冲区里还剩最后一段（其后没有操作符），补推进去
 
-  return { parts: parts.filter(Boolean), hasUnsupportedSyntax }
+  return { parts: parts.filter(Boolean), hasUnsupportedSyntax }  // 滤掉空串：尾随操作符或连写的分隔符会切出空段，留着会让 allow 的 every 判定失真
 }
 
 /**
@@ -122,16 +122,16 @@ export function parseCommand(command: string): ParsedCommand {
  */
 // 本函数：判断一条命令是否匹配规则模式，支持 `:*` 后缀与 `*` 通配。
 export function commandMatches(pattern: string, command: string): boolean {
-  const normalised = pattern.replace(/:\*$/, '').trim()
+  const normalised = pattern.replace(/:\*$/, '').trim()  // `git push:*` 与 `git push` 语义相同，先削掉 `:*` 后缀以统一后续处理
   const target = command.trim()
 
   if (normalised.includes('*')) {
     const escaped = normalised
-      .split('*')
+      .split('*')  // 按 `*` 切段 → 逐段转义正则元字符 → 用 `.*` 接回，使 `*` 成为模式里唯一有通配能力的字符
       .map(segment => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('.*')
-    return new RegExp(`^${escaped}$`).test(target)
+    return new RegExp(`^${escaped}$`).test(target)  // 锚定首尾做全串匹配，避免模式只命中命令中间的一小段
   }
 
-  return target === normalised || target.startsWith(`${normalised} `)
+  return target === normalised || target.startsWith(`${normalised} `)  // 无通配时要求全等或「模式 + 空格」开头，故 `git push` 不会误命中 `git pushall`
 }

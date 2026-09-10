@@ -52,7 +52,7 @@ export const GlobTool = buildTool({
     const isMatch = picomatch(input.pattern, { dot: true })
 
     const matches = walk({ cwd: root })
-      .filter(file => isMatch(file.relative))
+      .filter(file => isMatch(file.relative))  // 用相对 root 的正斜杠路径去匹配：绝对路径会让 `src/**` 这类模式在 Windows 上永远匹配不上
       .sort((a, b) => b.mtimeMs - a.mtimeMs)  // b 减 a 即时间倒序：最近改动的排在最前，模型读列表开头最认真
 
     if (matches.length === 0) {

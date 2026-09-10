@@ -36,7 +36,7 @@ export function estimateMessageTokens(message: Message): number {
     case 'user':
     case 'assistant':
       total += estimateTokens(message.content)
-      if (message.role === 'assistant' && message.toolCalls) {
+      if (message.role === 'assistant' && message.toolCalls) {  // 工具调用的名字与 JSON 参数同样占 token，漏算会让「写了长参数」的回合被严重低估
         for (const call of message.toolCalls) {
           total += estimateTokens(call.name) + estimateTokens(call.arguments)
         }
@@ -107,7 +107,7 @@ export const COMPACT_BUFFER_TOKENS = 5_000
 // 本函数：计算触发压缩的 token 阈值（窗口减去两块预留余量）。
 export function compactThreshold(model: string): number {
   return Math.max(
-    4_000,
+    4_000,  // 兜底下限：小窗口模型（如 8k 的 gpt-4）减去两块余量会得出负数，那将导致开局即无限压缩
     contextWindowFor(model) - RESPONSE_BUFFER_TOKENS - COMPACT_BUFFER_TOKENS,
   )
 }
@@ -130,7 +130,7 @@ export function tokenState(messages: Message[], systemPrompt: string, model: str
     window,
     threshold,
     percentUsed: Math.round((used / window) * 100),
-    shouldCompact: used > threshold,
+    shouldCompact: used > threshold,  // 比的是阈值而非窗口本身：越过阈值时仍剩 13k 余量，够装下压缩请求与模型回复
   }
 }
 

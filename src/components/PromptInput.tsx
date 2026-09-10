@@ -36,7 +36,7 @@ export function PromptInput({
     }
     // Ignore control keys; `input` is empty for most of them.
     // 忽略控制键；它们大多不会带来 `input` 内容。
-    if (input && !key.ctrl && !key.meta) setValue(previous => previous + input)
+    if (input && !key.ctrl && !key.meta) setValue(previous => previous + input)  // 排除 ctrl/meta 组合键，免得 Ctrl+C 之类的按键把控制字符写进输入框
   })
 
   return (

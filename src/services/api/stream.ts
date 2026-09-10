@@ -49,8 +49,8 @@ export async function* streamAssistantTurn(
       model: settings.model,
       messages,
       stream: true,
-      stream_options: { include_usage: true },
-      ...(tools?.length ? { tools, tool_choice: 'auto' as const } : {}),
+      stream_options: { include_usage: true },  // 流式默认不回传 usage，显式开启后会在最后一个分片里附上真实 token 数，用来校正我们的估算
+      ...(tools?.length ? { tools, tool_choice: 'auto' as const } : {}),  // 无工具时连字段都不发：部分供应商见到空的 tools 数组会直接报错
     },
     { signal },
   )
@@ -68,10 +68,10 @@ export async function* streamAssistantTurn(
     }
 
     const delta = chunk.choices[0]?.delta
-    if (!delta) continue
+    if (!delta) continue  // 携带 usage 的收尾分片没有 choices，跳过即可，别误当成流结束
 
     if (delta.content) {
-      text += delta.content
+      text += delta.content  // 一边累积完整文本供 'done' 使用，一边把增量 yield 出去让 UI 逐字渲染
       yield { type: 'text_delta', text: delta.content }
     }
 

@@ -69,7 +69,7 @@ export const FileReadTool = buildTool({
     const path = toAbsolute(ctx.cwd, input.file_path)
     const stat = statSync(path)
     const raw = readFileSync(path, 'utf8')
-    const allLines = raw.split(/\r?\n/)
+    const allLines = raw.split(/\r?\n/)  // 正则而非 '\n'：CRLF 文件若按 '\n' 切，每行都会拖着一个 \r，行号对齐与后续匹配都会歪掉
 
     const start = (input.offset ?? 1) - 1  // offset 对外是 1 起的行号，减 1 换成数组下标；缺省即从第一行开始
     const count = input.limit ?? MAX_LINES
@@ -79,7 +79,7 @@ export const FileReadTool = buildTool({
       .map((line, index) => {
         const truncated =
           line.length > MAX_LINE_LENGTH ? `${line.slice(0, MAX_LINE_LENGTH)}… [truncated]` : line
-        return `${String(start + index + 1).padStart(6)}\t${truncated}`
+        return `${String(start + index + 1).padStart(6)}\t${truncated}`  // 行号用「切片起点 + 片内下标 + 1」还原成全文的 1 起行号，分页读取时才不会从 1 重来
       })
       .join('\n')
 

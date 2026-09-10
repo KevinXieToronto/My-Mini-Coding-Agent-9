@@ -119,8 +119,8 @@ export function getGitStatus(cwd: string): string | undefined {
       return execFileSync('git', args, {
         cwd,
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'ignore'],  // 关掉 stdin 免得 git 弹凭据提示把启动挂住，忽略 stderr 免得告警混进提示词
+        timeout: 5000,  // 这段跑在启动路径上：网络文件系统里的仓库可能极慢，超时即放弃，不拖住 CLI 启动
       }).trim()
     } catch {
       return undefined
@@ -207,9 +207,9 @@ export function buildSessionContext(cwd: string, mcpInstructions?: string): Sess
 export function expandUserMentions(text: string, cwd: string): string {
   const attachments: string[] = []
 
-  for (const match of text.matchAll(/@([\w./\\-]+)/g)) {
+  for (const match of text.matchAll(/@([\w./\\-]+)/g)) {  // 字符集只收路径可能用到的字符，于是邮箱、@提及这类文本不会被误当成路径
     const path = toAbsolute(cwd, match[1]!)
-    if (!existsSync(path)) continue
+    if (!existsSync(path)) continue  // 存在性检查即最终过滤：文件不存在就当普通文本放过，宁可漏展开也不报错打断提问
     try {
       const body = readFileSync(path, 'utf8').slice(0, 20_000)  // 每个被提及的文件最多附 20 KB，避免一句 @ 就吃掉整个上下文窗口
       attachments.push(`### ${match[1]}\n\n\`\`\`\n${body}\n\`\`\``)
@@ -220,5 +220,5 @@ export function expandUserMentions(text: string, cwd: string): string {
   }
 
   if (attachments.length === 0) return text
-  return `${text}\n\n<!-- files referenced above -->\n${attachments.join('\n\n')}`
+  return `${text}\n\n<!-- files referenced above -->\n${attachments.join('\n\n')}`  // 文件内容附在原文之后而非替换掉 @ 提及，用户那句话仍完整可读
 }

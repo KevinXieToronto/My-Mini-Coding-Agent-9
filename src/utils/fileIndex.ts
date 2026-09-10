@@ -112,13 +112,13 @@ export function walk(options: WalkOptions): WalkedFile[] {
       }
 
       const rel = toPosix(relative(cwd, full))
-      if (!rel) continue
+      if (!rel) continue  // 相对路径为空说明它就是 cwd 本身，不该出现在结果里，也不能拿去做 ignore 匹配
       // ignore's API wants a trailing slash to recognise a directory rule.
       // ignore 的 API 需要结尾斜杠才能识别目录规则。
       if (ig.ignores(stat.isDirectory() ? `${rel}/` : rel)) continue  // 被忽略的目录直接不入队——剪枝而非逐个过滤其中的文件，这是遍历够快的关键
 
       if (stat.isDirectory()) {
-        queue.push(full)
+        queue.push(full)  // 目录只入队等下一轮展开，不在此处递归——递归会让深目录树把调用栈吃满
         if (includeDirs) {
           results.push({ path: full, relative: rel, mtimeMs: stat.mtimeMs, isDirectory: true })
         }

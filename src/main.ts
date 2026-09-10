@@ -29,7 +29,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
   loadEnvFile(opts.cwd)
 
   const settings = loadSettings(opts.cwd)
-  if (opts.model) settings.model = opts.model
+  if (opts.model) settings.model = opts.model  // 命令行是最高一层：分层加载完再逐项覆盖，就实现了「默认 < 用户 < 项目 < 参数」
 
   // Fail LOUDLY on an unknown mode. Silently falling back to `default` would
   // be safe, but a typo'd `--permission-mode plna` that quietly starts asking
@@ -153,7 +153,7 @@ function resolveResume(opts: CliOptions): SessionSummary | undefined {
     return latest
   }
   if (typeof opts.resume === 'string') {
-    const found = listSessions(cwd).find(session =>
+    const found = listSessions(cwd).find(session =>  // 按前缀匹配，用户敲几位 uuid 即可；listSessions 已按时间倒序，故多个前缀相同时取最近那个
       session.sessionId.startsWith(opts.resume as string),
     )
     if (!found) throw new Error(`No session in this directory starting with "${opts.resume}".`)

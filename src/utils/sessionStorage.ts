@@ -129,7 +129,7 @@ const MAX_TRANSCRIPT_BYTES = 50_000_000
 // 本函数：读取并解析 JSONL 记录文件为条目数组。
 export function readTranscript(path: string): TranscriptEntry[] {
   if (!existsSync(path)) return []
-  if (statSync(path).size > MAX_TRANSCRIPT_BYTES) {
+  if (statSync(path).size > MAX_TRANSCRIPT_BYTES) {  // 先看文件大小再决定读不读：readFileSync 会把整份记录一次性装进内存，超大文件足以让进程 OOM
     throw new Error(`Transcript ${path} is larger than 50 MB; refusing to load.`)
   }
   const entries: TranscriptEntry[] = []
@@ -159,7 +159,7 @@ export function listSessions(cwd: string): SessionSummary[] {
     .map(name => {
       const path = join(dir, name)
       const entries = readTranscript(path)
-      const firstUser = entries.find(entry => entry.message.role === 'user')
+      const firstUser = entries.find(entry => entry.message.role === 'user')  // 取首条 user 消息当预览：它是这次会话「要干什么」的最短说明，比末条更好认
       return {
         sessionId: name.replace(/\.jsonl$/, ''),
         path,

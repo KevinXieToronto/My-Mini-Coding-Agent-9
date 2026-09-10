@@ -46,7 +46,7 @@ export const TodoWriteTool = buildTool({
   // It touches nothing outside the process, so it never needs approval.
   // 它不触及进程之外的任何东西，因此永远不需要批准。
   isReadOnly: () => true,
-  isConcurrencySafe: () => false,
+  isConcurrencySafe: () => false,  // 只读却不可并发：它整份改写共享的 appState.todos，两次并行调用会互相覆盖
   checkPermissions: () => ({ behavior: 'allow' }),
 
   renderCall: () => 'TodoWrite',
@@ -54,6 +54,7 @@ export const TodoWriteTool = buildTool({
   // 刻意留空：待办面板本身就是结果。
   renderResult: undefined,
 
+  // 本函数：校验清单中至多只有一项 in_progress——「同时在做多件事」几乎总是模型跑偏的征兆。
   validateInput(input) {
     const active = input.todos.filter(todo => todo.status === 'in_progress')
     if (active.length > 1) {
@@ -67,6 +68,7 @@ export const TodoWriteTool = buildTool({
     return { ok: true }
   },
 
+  // 本函数：整份替换该代理的待办清单，并把完成进度与当前项汇报回模型。
   async execute(input, ctx) {
     const key = ctx.agentId ?? 'main'  // 按 agentId 分桶存放：子代理有自己的清单，不会覆盖主循环的
     const previous = ctx.appState.todos[key] ?? []

@@ -16,6 +16,7 @@ import { doctor } from './doctor.js'
  * `/help` 要列出注册表，而注册表由本文件构建——顶层 import 会形成循环依赖。
  * 把 import 放进 call 里即可打破：等到用户敲 /help 时，两个模块都已加载完毕。
  */
+// 本命令：/help，列出注册表中所有未隐藏的命令，按名排序并对齐成表。
 const help: Command = {
   type: 'local',
   name: 'help',
@@ -24,9 +25,9 @@ const help: Command = {
   async call(_args, ctx) {
     const { getCommands } = await import('../commands.js')
     const commands = getCommands(ctx.cwd).filter(command => !command.hidden)
-    const width = Math.max(...commands.map(command => command.name.length)) + 2
+    const width = Math.max(...commands.map(command => command.name.length)) + 2  // 以最长命令名 + 2 作为对齐宽度，描述列才会排成一条竖线
     const lines = commands
-      .slice()
+      .slice()  // 先复制再排序：sort 会就地重排，直接排会打乱注册表本身的顺序
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(command => {
         const hint = command.type === 'prompt' && command.argumentHint
@@ -59,7 +60,7 @@ const context: Command = {
   description: 'Show context window usage',
   async call(_args, ctx) {
     const state = tokenState(ctx.messages, ctx.systemPrompt, ctx.settings.model)
-    const bar = '='.repeat(Math.round(state.percentUsed / 5)).padEnd(20, '.')
+    const bar = '='.repeat(Math.round(state.percentUsed / 5)).padEnd(20, '.')  // 百分比除以 5 即映射到 20 格进度条，再用点号补齐余下的格子
     return {
       type: 'text',
       text: [
@@ -79,6 +80,7 @@ const context: Command = {
  * 需要 REPL 持有的状态（花费统计、文件历史）的命令用工厂构建，而非声明为常量。
  * 契约相同，只是多了个闭包——分发器里不需要任何特例。
  */
+// 本函数：构建 /cost 命令，闭包持有 REPL 的花费统计器，报告用量与估算金额。
 export function makeCostCommand(cost: CostTracker): Command {
   return {
     type: 'local',
@@ -217,6 +219,7 @@ const sessions: Command = {
  * 一条内置的「提示词命令」：展开成文本发给模型。
  * 这与用户往 .mini-cc/commands 丢 markdown 文件所得到的机制完全相同——内置命令没有特权。
  */
+// 本命令：/review，展开成一段代码评审提示词发给模型，与用户自写的 markdown 命令走同一条机制。
 const review: Command = {
   type: 'prompt',
   name: 'review',

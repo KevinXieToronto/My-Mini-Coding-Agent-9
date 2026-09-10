@@ -21,6 +21,7 @@ import { BUILTIN_COMMANDS } from './commands/builtins.js'
  * plugin commands and MCP prompts (as `mcp__<server>__<prompt>`).
  * 参见 Claude Code 的 src/commands.ts：那里还会合并插件命令与 MCP prompt。
  */
+// 本函数：合并内置、用户级与项目级命令，同名后来者覆盖先来者，返回去重后的命令列表。
 export function getCommands(cwd: string): Command[] {
   const byName = new Map<string, Command>()
 
@@ -48,6 +49,7 @@ export function findCommand(commands: Command[], name: string): Command | undefi
  * Returns undefined when the line is not a command at all.
  * 把 "/review src/app.ts extra" 拆成命令名与参数；不是命令则返回 undefined。
  */
+// 本函数：把一行输入拆成命令名与参数；不以 / 开头则返回 undefined 表示这不是命令。
 export function parseCommandLine(line: string): { name: string; args: string } | undefined {
   if (!line.startsWith('/')) return undefined
   const trimmed = line.slice(1)
@@ -74,6 +76,7 @@ export function parseCommandLine(line: string): { name: string; args: string } |
  * take individual whitespace-separated words.
  * `$ARGUMENTS` 替换为命令后的全部参数；`$1`、`$2` … 取按空白分隔的单个词。
  */
+// 本函数：把某目录下的 *.md 逐个解析成提示词命令，单个文件出错只跳过它本身。
 export function loadCommandDir(dir: string, source: 'user' | 'project'): PromptCommand[] {
   if (!existsSync(dir)) return []
 
@@ -127,8 +130,9 @@ export function splitFrontmatter(raw: string): {
 
 /** `$ARGUMENTS` gets everything; `$1`, `$2` … get individual words. */
 /** `$ARGUMENTS` 取全部参数；`$1`、`$2` … 取单个词。 */
+// 本函数：把命令正文里的 $ARGUMENTS 与 $1、$2 … 占位符替换成实际参数。
 export function substituteArguments(template: string, args: string): string {
-  const words = args.split(/\s+/).filter(Boolean)
+  const words = args.split(/\s+/).filter(Boolean)  // filter(Boolean) 去掉首尾空白切出的空串，否则 $1 会拿到空词
   return template
     .replace(/\$ARGUMENTS/g, args)
     .replace(/\$(\d+)/g, (whole, index: string) => words[Number(index) - 1] ?? whole)  // $1 对应第 0 个词故减 1；越界时原样保留占位符，不产出 undefined

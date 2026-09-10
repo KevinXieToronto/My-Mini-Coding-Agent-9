@@ -60,7 +60,7 @@ function DiffView({ before, after }: { before: string; after: string }): React.R
     // 未改动的上下文行：整段跳过。
     const lines = part.value.replace(/\n$/, '').split('\n')  // diff 片段自带结尾换行，先削掉再切分，否则末尾会多出一个空行
     for (const [lineIndex, line] of lines.entries()) {
-      if (shown >= MAX_DIFF_LINES) break
+      if (shown >= MAX_DIFF_LINES) break  // 只跳出内层循环即可：shown 已达上限，外层剩余片段进来后同样立刻 break，不会再添行
       shown += 1
       rows.push(
         <Text key={`${index}-${lineIndex}`} color={part.added ? 'green' : 'red'}>

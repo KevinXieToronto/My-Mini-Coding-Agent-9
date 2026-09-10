@@ -41,7 +41,7 @@ export const FileWriteTool = buildTool({
   // 本函数：文件已存在且本会话未读过时拒绝覆盖，避免丢失看不见的内容。
   validateInput(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
-    if (existsSync(path) && !ctx.readFileState.has(path)) {
+    if (existsSync(path) && !ctx.readFileState.has(path)) {  // 两个条件缺一不可：新建文件无需先读（没东西可丢），只有覆盖既有文件才要求读过
       return {
         ok: false,
         message:

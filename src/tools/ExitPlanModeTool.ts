@@ -51,8 +51,9 @@ export const ExitPlanModeTool = buildTool({
     return data?.approved ? 'plan approved' : 'plan rejected'
   },
 
+  // 本函数：校验当前确实处于 plan 模式，否则这次调用无事可做。
   validateInput(_input, ctx) {
-    if (ctx.permissions.mode !== 'plan') {
+    if (ctx.permissions.mode !== 'plan') {  // 模式已被别处改走（如 /mode），此时退出计划毫无意义，早早报错好过白白打断用户
       return { ok: false, message: 'Not in plan mode; there is nothing to exit.' }
     }
     return { ok: true }
@@ -63,6 +64,7 @@ export const ExitPlanModeTool = buildTool({
    * interrupt the human — approving the plan is the entire point.
    * 一律询问。这是 plan 模式下唯一「就该」打断人类的调用——批准计划正是它的全部意义。
    */
+  // 本函数：一律返回 ask，把计划正文当作询问文案——批准这次调用即等于批准这份计划。
   checkPermissions(input) {
     return {
       behavior: 'ask',
@@ -70,6 +72,7 @@ export const ExitPlanModeTool = buildTool({
     }
   },
 
+  // 本函数：把权限模式切回进入 plan 之前的那个，并告知模型现在可以动手了。
   async execute(_input, ctx) {
     // Reaching execute() means the gate said allow, which means the human
     // approved. Flip the mode.

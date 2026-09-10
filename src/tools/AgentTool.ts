@@ -126,7 +126,7 @@ export function createAgentTool(deps: AgentToolDeps) {
         tools,
         systemPrompt: AGENT_PROMPTS[type],
         ctx: childCtx,
-        maxTurns: 20,
+        maxTurns: 20,  // 子代理独立限圈，父级回合数与它无关；跑飞的子代理最多烧掉这 20 圈就被强制收尾
       })
 
       // Only the final message crosses back. Everything else is discarded —

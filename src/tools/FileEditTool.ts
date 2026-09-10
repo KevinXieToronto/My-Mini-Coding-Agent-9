@@ -58,7 +58,7 @@ export const FileEditTool = buildTool({
     }
 
     const path = toAbsolute(ctx.cwd, input.file_path)
-    const seen = ctx.readFileState.get(path)
+    const seen = ctx.readFileState.get(path)  // readFileState 里有记录，才证明模型真的读过这个文件——这就是「先读后写」的凭据
     if (!seen) {
       return { ok: false, message: `You must Read ${input.file_path} before editing it.` }
     }
@@ -148,7 +148,7 @@ function snippetAround(content: string, marker: string): string {
   const linesBefore = content.slice(0, index).split('\n')
   const allLines = content.split('\n')
   const startLine = Math.max(0, linesBefore.length - 3)  // 命中点之前的文本有几行，行号就是几；据此上取 3 行作为片段起点
-  const endLine = Math.min(allLines.length, linesBefore.length + marker.split('\n').length + 2)
+  const endLine = Math.min(allLines.length, linesBefore.length + marker.split('\n').length + 2)  // 终点 = 起始行 + 新文本自身占的行数 + 下方 2 行，故多行替换也能被整段包住
   return allLines
     .slice(startLine, endLine)
     .map((line, i) => `${String(startLine + i + 1).padStart(6)}\t${line}`)

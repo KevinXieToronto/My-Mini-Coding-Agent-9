@@ -48,9 +48,9 @@ function isSafe(call: ToolCall, byName: Map<string, Tool>): boolean {
   const tool = byName.get(call.name)
   if (!tool) return false
   try {
-    const parsed = tool.inputSchema.safeParse(JSON.parse(call.arguments || '{}'))
+    const parsed = tool.inputSchema.safeParse(JSON.parse(call.arguments || '{}'))  // 先解析入参才能问「这次调用安不安全」——并发性看的是参数，不是工具本身
     if (!parsed.success) return false
-    return tool.isConcurrencySafe?.(parsed.data) ?? false
+    return tool.isConcurrencySafe?.(parsed.data) ?? false  // 工具没声明就按不安全处理，于是新写的工具默认串行，不会悄悄获得并发资格
   } catch {
     return false
   }
@@ -100,7 +100,7 @@ export async function runWithConcurrency<T>(
 // 本函数：读取并发上限（环境变量 MINI_CC_MAX_TOOL_CONCURRENCY），非法值回退到默认值。
 export function maxConcurrency(): number {
   const raw = Number(process.env.MINI_CC_MAX_TOOL_CONCURRENCY)
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_CONCURRENCY
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_CONCURRENCY  // 未设置时 Number(undefined) 得 NaN，非法值与 0、负数一并被这行滤回默认值
 }
 
 /**

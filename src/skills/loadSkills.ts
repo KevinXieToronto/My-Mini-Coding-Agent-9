@@ -79,7 +79,7 @@ export function loadSkills(cwd: string): Skill[] {
     }
   }
 
-  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))  // 按名排序使提示词里的技能清单顺序稳定，目录读取次序变动不会白白作废提示词缓存
 }
 
 // 本函数：把单个 SKILL.md 解析成 Skill 对象；缺少 description 即视为无效技能。

@@ -31,7 +31,7 @@ export const ListDirTool = buildTool({
   async execute(input, ctx) {
     const target = isAbsolute(input.path) ? input.path : resolve(ctx.cwd, input.path)
     const entries = readdirSync(target)
-      .slice(0, 200)
+      .slice(0, 200)  // 先截断再 map：限量发生在 statSync 之前，超大目录不会白白 stat 上万次
       .map(name => (statSync(join(target, name)).isDirectory() ? `${name}/` : name))  // 目录名补一个斜杠，排序后目录与文件在视觉上仍可一眼区分
       .sort()
 

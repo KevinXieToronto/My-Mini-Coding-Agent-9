@@ -16,9 +16,9 @@ const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '
 export function Spinner({ label }: { label: string }): React.ReactElement {
   const [frame, setFrame] = useState(0)
   useEffect(() => {
-    const timer = setInterval(() => setFrame(f => (f + 1) % FRAMES.length), 80)
+    const timer = setInterval(() => setFrame(f => (f + 1) % FRAMES.length), 80)  // 取模让帧下标循环回绕，计数器无限增长也不会越界
     return () => clearInterval(timer)
-  }, [])
+  }, [])  // 依赖数组为空：定时器只在挂载时建一次，卸载时由返回的清理函数收掉，否则每次重渲染都会多起一个
   return (
     <Box marginTop={1}>
       <Text color="cyan">{FRAMES[frame]}</Text>

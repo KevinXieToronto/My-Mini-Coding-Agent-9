@@ -62,6 +62,7 @@ export class FileHistory {
   // 本函数：返回回退到该下标时受影响的文件路径。
   affectedBy(messageIndex: number): string[] {
     return [
+      // 取下标 >= 目标的全部快照（即回退点之后发生的改动），再用 Set 去重——同一文件跨多个回合可能有多份快照
       ...new Set(this.checkpoints.filter(c => c.messageIndex >= messageIndex).map(c => c.path)),
     ]
   }
