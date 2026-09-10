@@ -7,7 +7,7 @@ import type { Message } from '../types/message.js'
 import type { Tool, ToolContext } from '../Tool.js'
 import type { Usage } from '../services/api/stream.js'
 import { query, type CanUseTool, type Terminal } from '../query.js'
-import { getAllTools } from '../tools.js'
+import { getToolsWithAgent } from '../tools.js'
 import { TodoPanel } from '../components/TodoPanel.js'
 import { PRODUCT_NAME, VERSION } from '../constants/product.js'
 import { buildSessionContext, expandUserMentions } from '../context.js'
@@ -88,7 +88,7 @@ export function REPL({ settings, resume }: REPLProps): React.ReactElement {
   // Built after the permission context, because the advertised tool list is
   // mode-dependent: ExitPlanMode only exists in plan mode.
   // 放在权限上下文之后构建：对外暴露的工具表与模式相关——ExitPlanMode 仅存在于 plan 模式。
-  const toolsRef = useLazyRef<Tool[]>(() => getAllTools(permissionContext.mode))
+  const toolsRef = useLazyRef<Tool[]>(() => getToolsWithAgent(settings, permissionContext.mode))
   // Built once: git status and MINI.md are session-scoped, and rebuilding them
   // every turn would break the provider's prompt cache for no real benefit.
   // 只构建一次：git 状态与 MINI.md 属于会话级信息，逐回合重建只会白白打断服务商的提示词缓存。

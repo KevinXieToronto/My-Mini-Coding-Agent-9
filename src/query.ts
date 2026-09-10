@@ -8,6 +8,11 @@ import { toApiTools, type PermissionResult, type Tool, type ToolContext } from '
 import { evaluatePermission } from './utils/permissions.js'
 import { tokenState } from './utils/tokens.js'
 import { compactConversation } from './services/compact/compact.js'
+import {
+  partitionToolCalls,
+  runWithConcurrency,
+  maxConcurrency,
+} from './services/tools/toolOrchestration.js'
 
 /**
  * THE AGENT LOOP.
@@ -196,16 +201,24 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
     // --- 4: run the tools and feed the results back ------------------------
     // --- 第 4 步：执行工具并把结果回灌 ---
     //
-    // Serial for now. Chapter 14 adds a batch scheduler that runs
-    // concurrency-safe calls in parallel while preserving relative order.
-    // 目前串行。第 14 章加入批调度器，在保持相对顺序的前提下并行执行并发安全的调用。
-    for (const call of toolCalls) {
+    // Consecutive concurrency-safe calls run in parallel; everything else runs
+    // alone. Grouping only ADJACENT safe calls preserves relative order, so a
+    // Read can never overtake an Edit to the same file.
+    // 相邻的并发安全调用并行执行，其余单独执行。只合并「相邻」的安全调用即可保住相对顺序，
+    // 因此 Read 永远不会越过对同一文件的 Edit。
+    const batches = partitionToolCalls(toolCalls, byName)
+
+    for (const batch of batches) {
       if (signal.aborted) {
         // Every tool_use MUST get a tool_result or the next request is
-        // malformed, so we synthesise error results for the rest.
+        // malformed, so we synthesise error results for everything left.
         // 每个 tool_use 必须有对应的 tool_result，否则下一次请求格式非法，
-        // 因此为剩余调用合成错误结果。
-        for (const pending of toolCalls.slice(toolCalls.indexOf(call))) {
+        // 因此为所有尚未应答的调用合成错误结果。
+        const answered = new Set(
+          messages.flatMap(message => (message.role === 'tool' ? [message.toolCallId] : [])),
+        )
+        for (const pending of toolCalls) {
+          if (answered.has(pending.id)) continue
           const interrupted: Message = {
             role: 'tool',
             toolCallId: pending.id,
@@ -218,12 +231,27 @@ export async function* query(params: QueryParams): AsyncGenerator<QueryEvent, Te
         return { reason: 'aborted', turns: turn }
       }
 
-      yield { type: 'tool_start', call }
-      const { result, isError } = await runOneTool(call, byName, toolContext, canUseTool)
-      const toolMessage: Message = { role: 'tool', toolCallId: call.id, content: result, isError }
-      messages.push(toolMessage)
-      onMessage(toolMessage)
-      yield { type: 'tool_end', call, result, isError }
+      for (const call of batch.calls) yield { type: 'tool_start', call }
+
+      const outcomes = batch.parallel
+        ? await runWithConcurrency(
+            batch.calls.map(call => () => runOneTool(call, byName, toolContext, canUseTool)),
+            maxConcurrency(),
+          )
+        : [await runOneTool(batch.calls[0]!, byName, toolContext, canUseTool)]
+
+      for (const [index, outcome] of outcomes.entries()) {
+        const call = batch.calls[index]!
+        const toolMessage: Message = {
+          role: 'tool',
+          toolCallId: call.id,
+          content: outcome.result,
+          isError: outcome.isError,
+        }
+        messages.push(toolMessage)
+        onMessage(toolMessage)
+        yield { type: 'tool_end', call, result: outcome.result, isError: outcome.isError }
+      }
     }
   }
 }
