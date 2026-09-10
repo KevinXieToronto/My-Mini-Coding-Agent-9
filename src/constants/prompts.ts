@@ -57,6 +57,11 @@ export type DynamicContext = {
   platform: string
   today: string
   gitStatus?: string
+  /**
+   * The Skills section: names and descriptions only, never the bodies.
+   * 技能区块：只含名称与描述，绝不含正文。
+   */
+  skillsSection?: string
   projectInstructions?: string
 }
 
@@ -73,6 +78,13 @@ Today: ${context.today}`,
 
   if (context.gitStatus) {
     blocks.push(`# Git status\n${context.gitStatus}`)
+  }
+
+  // Skills come BEFORE the project instructions, so MINI.md keeps the last
+  // word: a rule in the project file still overrides anything a skill says.
+  // 技能排在项目指令之前，让 MINI.md 拥有最终话语权：项目文件里的规则仍可覆盖技能所述。
+  if (context.skillsSection) {
+    blocks.push(context.skillsSection)
   }
 
   if (context.projectInstructions) {

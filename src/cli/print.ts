@@ -5,6 +5,7 @@ import type { PermissionContext } from '../types/permissions.js'
 import type { Message } from '../types/message.js'
 import { query } from '../query.js'
 import { getToolsWithAgent } from '../tools.js'
+import { loadSkills } from '../skills/loadSkills.js'
 import { FileHistory } from '../utils/fileHistory.js'
 import { createAppState } from '../state/appState.js'
 
@@ -44,7 +45,7 @@ export async function runPrintMode(
   const iterator = query({
     messages,
     settings,
-    tools: getToolsWithAgent(settings, permissions.mode),
+    tools: getToolsWithAgent(settings, permissions.mode, loadSkills(process.cwd())),
     toolContext: {
       cwd: process.cwd(),
       abortController,

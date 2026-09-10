@@ -12,6 +12,8 @@ import { PowerShellTool } from './tools/PowerShellTool.js'
 import { TodoWriteTool } from './tools/TodoWriteTool.js'
 import { ExitPlanModeTool } from './tools/ExitPlanModeTool.js'
 import { createAgentTool } from './tools/AgentTool.js'
+import { createSkillTool } from './tools/SkillTool.js'
+import type { Skill } from './skills/loadSkills.js'
 import type { Settings } from './utils/config.js'
 
 /**
@@ -76,11 +78,21 @@ export function getSubagentTools(mode: PermissionMode = 'default'): Tool[] {
  * Agent 在此构造而非声明为常量，是因为它需要 query()，而 query() 又需要注册表。
  * 在构造时注入循环，可保持导入图无环。
  */
-// 本函数：返回含 Agent 工具的完整注册表，并在构造时把 query 循环注入 Agent 工具。
-export function getToolsWithAgent(settings: Settings, mode: PermissionMode = 'default'): Tool[] {
-  const base = getAllTools(mode)
+// 本函数：返回含 Agent 与 Skill 工具的完整注册表，并在构造时把 query 循环注入 Agent 工具。
+export function getToolsWithAgent(
+  settings: Settings,
+  mode: PermissionMode = 'default',
+  skills: Skill[] = [],
+): Tool[] {
+  // Skill is built here for the same reason Agent is: it needs the session's
+  // skill list, which the registry has no way to discover on its own.
+  // Skill 与 Agent 同理在此构造：它需要本会话的技能列表，而注册表自己无从得知。
+  const base = [...getAllTools(mode), createSkillTool(() => skills) as unknown as Tool]
   const agent = createAgentTool({
-    getTools: () => getSubagentTools(mode),
+    // Sub-agents get skills too — that is how a skill can say "delegate the
+    // wide search to a sub-agent" and have it work.
+    // 子代理同样拿得到技能——技能里写「把大范围搜索交给子代理」才真的行得通。
+    getTools: () => [...getSubagentTools(mode), createSkillTool(() => skills) as unknown as Tool],
     async runNestedQuery({ messages, tools, systemPrompt, ctx, maxTurns }) {
       const { query } = await import('./query.js')
       const iterator = query({

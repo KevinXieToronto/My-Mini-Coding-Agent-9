@@ -5,6 +5,7 @@ import { homedir, platform, release } from 'node:os'
 import { dirname, join, parse } from 'node:path'
 import { PROJECT_MEMORY_FILE, CONFIG_DIR_NAME } from './constants/product.js'
 import { toAbsolute, toDisplayPath } from './utils/paths.js'
+import { loadSkills, renderSkillsSection, visibleSkills } from './skills/loadSkills.js'
 
 /**
  * Assemble everything the model needs to know about *this* project and *this*
@@ -158,6 +159,7 @@ export type SessionContext = {
   platform: string
   today: string
   gitStatus?: string
+  skillsSection?: string
   projectInstructions?: string
 }
 
@@ -175,6 +177,10 @@ export function buildSessionContext(cwd: string): SessionContext {
     platform: `${platform()} ${release()}`,
     today: new Date().toISOString().slice(0, 10),
     gitStatus: getGitStatus(cwd),
+    // Nothing has been touched yet, so only the unconditional skills are
+    // advertised — a conditional one costs nothing until it becomes relevant.
+    // 此刻尚未触及任何文件，故只公布无条件技能——条件技能在变得相关前不花一分钱。
+    skillsSection: renderSkillsSection(visibleSkills(loadSkills(cwd), [])),
     projectInstructions: loadProjectInstructions(cwd),
   }
 }
