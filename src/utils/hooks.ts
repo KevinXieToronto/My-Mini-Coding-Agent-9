@@ -74,8 +74,12 @@ export function matcherApplies(
 /** Run one hook and parse whatever it printed. */
 /** 执行单个钩子，并解析它打印出来的内容。 */
 // 本函数：以子进程方式运行一个钩子命令，把事件负载写入 stdin，带超时地收集其输出。
+// 整体流程：1 以 shell 起子进程 → 2 装好只结算一次的 finish 与超时器
+//          → 3 挂 stdout/stderr/error/close 监听 → 4 把负载写入 stdin 并立即关闭
+//          → 5 无论超时、启动失败还是正常退出，都经 finish 解析输出后兑现一次。
 export function runHook(hook: HookCommand, payload: HookInput, cwd: string): Promise<HookRunResult> {
   return new Promise(resolve => {
+    // 步骤 1：起子进程。
     const child = spawn(hook.command, {
       cwd,
       shell: true, // hooks are written as shell one-liners
@@ -88,6 +92,7 @@ export function runHook(hook: HookCommand, payload: HookInput, cwd: string): Pro
     let stderr = ''
     let settled = false
 
+    // 步骤 2：收尾函数与超时器。
     // 本函数：只结算一次——清掉超时器并把收集到的输出交回。
     const finish = (exitCode: number | null): void => {
       if (settled) return  // 超时、启动失败、正常退出可能先后触发，这个闩确保 Promise 只结算一次
@@ -102,6 +107,7 @@ export function runHook(hook: HookCommand, payload: HookInput, cwd: string): Pro
       finish(null)
     }, hook.timeout ?? DEFAULT_TIMEOUT_MS)
 
+    // 步骤 3：三路监听——输出累积、启动失败、正常退出，后两者都收敛到 finish。
     child.stdout.on('data', chunk => (stdout += String(chunk)))
     child.stderr.on('data', chunk => (stderr += String(chunk)))
     child.on('error', error => {
@@ -112,6 +118,7 @@ export function runHook(hook: HookCommand, payload: HookInput, cwd: string): Pro
     })
     child.on('close', code => finish(code))
 
+    // 步骤 4：把事件负载喂进 stdin。
     child.stdin.end(JSON.stringify(payload))  // 写完负载立刻关闭 stdin：钩子读到 EOF 才会结束，不关就会一直等下去
   })
 }
@@ -175,11 +182,16 @@ export type PreToolUseResult = {
  * `updatedInput` 会向后传递：后续钩子看到的是前一个钩子改写后的入参，而非模型的原始参数。
  */
 // 本函数：按序运行 PreToolUse 钩子，聚合出放行/拒绝/询问的决定与可能被改写的入参。
+// 整体流程：1 按匹配器挑出适用的钩子，没有就直接返回「无意见」
+//          → 2 逐个执行：收下 updatedInput 并向后传递
+//          → 3 遇 deny 立即返回，后续钩子不再启动
+//          → 4 ask 与 allow 只做单向收敛（allow 不覆盖已有的 ask）。
 export async function runPreToolUseHooks(
   config: HooksConfig,
   payload: HookInput,
   cwd: string,
 ): Promise<PreToolUseResult> {
+  // 步骤 1：挑出适用的钩子。
   const commands = selectHooks(config, 'PreToolUse', payload)
   if (commands.length === 0) return {}
 
@@ -189,11 +201,13 @@ export async function runPreToolUseHooks(
   for (const command of commands) {
     const { output } = await runHook(command, current, cwd)
 
+    // 步骤 2：入参改写向后传递。
     if (output.updatedInput) {
       result.updatedInput = output.updatedInput
       current = { ...current, tool_input: output.updatedInput }  // 改写后的入参喂给下一个钩子，于是后面的钩子看到的是最新版本而非模型原始参数
     }
 
+    // 步骤 3：拒绝短路。
     if (output.permissionDecision === 'deny' || output.continue === false) {  // 拒绝即刻返回，后续钩子不再启动——更严格的答案必须胜出
       return {
         ...result,
@@ -201,6 +215,7 @@ export async function runPreToolUseHooks(
         reason: output.permissionDecisionReason ?? output.stopReason,
       }
     }
+    // 步骤 4：ask / allow 单向收敛。
     if (output.permissionDecision === 'ask') {
       result.decision = 'ask'
       result.reason = output.permissionDecisionReason

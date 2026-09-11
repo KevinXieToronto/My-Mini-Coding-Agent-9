@@ -301,6 +301,7 @@ async function runOneTool(
   ctx: ToolContext,
   canUseTool: CanUseTool,
 ): Promise<{ result: string; isError: boolean }> {
+  // 步骤 1：按名字查表取出工具；查不到就把可用工具清单回报给模型，让它换一个。
   const tool = byName.get(call.name)
   if (!tool) {
     return {
@@ -309,6 +310,7 @@ async function runOneTool(
     }
   }
 
+  // 步骤 2：把模型拼出来的参数文本解析成 JSON；解析失败连原文一起回报，便于它自查。
   let raw: unknown
   try {
     raw = JSON.parse(call.arguments || '{}')
@@ -322,6 +324,7 @@ async function runOneTool(
   // The schema is the first wall. strictObject rejects unknown keys, which
   // catches a surprising number of model mistakes.
   // schema 是第一道墙。strictObject 拒绝未知字段，能拦下相当多的模型失误。
+  // 步骤 3：过 zod schema，结构不合法即止步。
   const parsed = tool.inputSchema.safeParse(raw)  // strictObject 会连未知字段一并拒绝，能拦下模型「多写一个参数」这类常见失误
   if (!parsed.success) {
     return {
@@ -330,6 +333,7 @@ async function runOneTool(
     }
   }
 
+  // 步骤 4：工具自带的语义预检（如 Edit 的「先读后写」），结构合法但语义不通也要拦。
   const validation = tool.validateInput?.(parsed.data, ctx)
   if (validation && !validation.ok) {
     return { result: `Error: ${validation.message}`, isError: true }
@@ -339,6 +343,7 @@ async function runOneTool(
   // the input. A hook that denies wins over any allow rule — hooks subtract.
   // PreToolUse 钩子在闸门之前运行，可直接拒绝、也可改写入参。
   // 钩子的拒绝压过任何 allow 规则——钩子做的是减法。
+  // 步骤 5：跑 PreToolUse 钩子，它可以直接拒绝，也可以改写入参（改写后需重新校验）。
   let input = parsed.data
   const pre = await runPreToolUseHooks(
     ctx.hooks,
@@ -363,6 +368,7 @@ async function runOneTool(
 
   // THE GATE. Everything above this line was validation; this is authorisation.
   // 闸门。此线之上都是「校验」，这里才是「授权」。
+  // 步骤 6：权限闸门判定——deny 直接回错，ask 则询问人类，拒绝同样只是一条 tool_result。
   const decision: PermissionResult =
     pre.decision === 'allow'
       ? { behavior: 'allow' }
@@ -383,12 +389,14 @@ async function runOneTool(
   }
 
   try {
+    // 步骤 7：真正执行工具；抛出的异常在下方 catch 里同样转成错误文本，不上抛到循环。
     const output = await tool.execute(input, ctx)
 
     // PostToolUse hooks cannot undo the call — it already happened — but they
     // can append context. This is where a formatter or a linter runs.
     // PostToolUse 钩子无法撤销这次调用（它已经发生了），但可以追加上下文。
     // 格式化器、linter 就跑在这里。
+    // 步骤 8：跑 PostToolUse 钩子，把它注入的文本拼到结果尾部一并交还模型。
     const post = await runContextHooks(
       ctx.hooks,
       'PostToolUse',

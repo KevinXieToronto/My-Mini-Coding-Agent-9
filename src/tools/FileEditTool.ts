@@ -52,23 +52,30 @@ export const FileEditTool = buildTool({
   },
 
   // 本函数：编辑前校验——新旧串不同、文件已读过、mtime 未变、old_string 存在且唯一（除非 replace_all）。
+  // 整体流程：1 新旧串不得相同 → 2 必须在 readFileState 里（先读后写）
+  //          → 3 文件必须存在 → 4 mtime 不得比读取时更新（防陈旧）
+  //          → 5 old_string 必须存在，且唯一或显式 replace_all。
   validateInput(input, ctx) {
+    // 步骤 1：新旧串相同等于空操作。
     if (input.old_string === input.new_string) {
       return { ok: false, message: 'old_string and new_string are identical; nothing to do.' }
     }
 
+    // 步骤 2：先读后写。
     const path = toAbsolute(ctx.cwd, input.file_path)
     const seen = ctx.readFileState.get(path)  // readFileState 里有记录，才证明模型真的读过这个文件——这就是「先读后写」的凭据
     if (!seen) {
       return { ok: false, message: `You must Read ${input.file_path} before editing it.` }
     }
 
+    // 步骤 3：文件仍在。
     let stat
     try {
       stat = statSync(path)
     } catch {
       return { ok: false, message: `File not found: ${input.file_path}` }
     }
+    // 步骤 4：防陈旧。
     if (stat.mtimeMs > seen.mtimeMs) {  // 把当前 mtime 与「读取时记下的 mtime」比对：变大说明文件在我们背后被改过，模型手里的内容已过期
       return {
         ok: false,
@@ -78,6 +85,7 @@ export const FileEditTool = buildTool({
       }
     }
 
+    // 步骤 5：命中次数——0 次报「找不到」，多次且未要求全替换则要求补上下文。
     const content = readFileSync(path, 'utf8')
     const occurrences = countOccurrences(content, input.old_string)
     if (occurrences === 0) {
@@ -100,8 +108,14 @@ export const FileEditTool = buildTool({
   },
 
   // 本函数：以不含 await 的「读—改—写」完成替换，并回传改动附近的片段供确认。
+  // 整体流程：1 动手前先给 /rewind 留快照 → 2 同步读入原文
+  //          → 3 按 replace_all 决定替换一处还是全部 → 4 写回磁盘
+  //          → 5 立即刷新 readFileState，免得自己刚写的内容被判为陈旧
+  //          → 6 回传替换次数与改动附近的带行号片段。
   async execute(input, ctx) {
     const path = toAbsolute(ctx.cwd, input.file_path)
+
+    // 步骤 1：快照。
 
     // Snapshot before we touch it, so /rewind can put it back.
     // 动手前先快照，让 /rewind 能把它放回去。
@@ -112,6 +126,7 @@ export const FileEditTool = buildTool({
     // explicit "no awaits in this region" comment.
     // 读—改—写之间不含 await：没有别的任务能穿插进来把文件写坏。
     // Claude Code 在对应区域专门标注了「此处不得 await」。
+    // 步骤 2、3、4：读—改—写，全程同步。
     const before = readFileSync(path, 'utf8')  // 自此到 writeFileSync 全程同步、不含 await，读到写之间无人能插队改动此文件
     const replacements = countOccurrences(before, input.old_string)
     const after = input.replace_all
@@ -119,8 +134,10 @@ export const FileEditTool = buildTool({
       : before.replace(input.old_string, input.new_string)
     writeFileSync(path, after, 'utf8')
 
+    // 步骤 5：刷新已读状态。
     ctx.readFileState.set(path, { timestamp: Date.now(), mtimeMs: statSync(path).mtimeMs })  // 写完立刻刷新已读状态，否则自己刚写的文件会被下一次编辑当成「已过期」
 
+    // 步骤 6：回传结果。data 里的 before/after 供 UI 渲染 diff，模型只看 result。
     const applied = input.replace_all ? replacements : 1
     return {
       result:

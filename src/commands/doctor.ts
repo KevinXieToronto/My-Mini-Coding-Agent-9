@@ -33,6 +33,10 @@ type Check = { label: string; ok: boolean; detail: string }
  * 参见 src/commands/doctor 与 src/screens/Doctor.tsx。
  */
 // 本命令：/doctor，逐项体检并输出一份带 +/! 标记的纯文本报告。
+// 整体流程：1 动态加载两个会成环的模块 → 2 查运行环境（Node 版本、密钥、baseURL、模型、权限模式）
+//          → 3 查「由文件决定能力」的三处：技能、钩子、MCP 服务器
+//          → 4 查 MINI.md 与会话记录 → 5 探 git 与 ripgrep 两个可选外部程序
+//          → 6 按最长标签对齐，拼成一份报告返回。
 export const doctor: Command = {
   type: 'local',
   name: 'doctor',
@@ -45,6 +49,7 @@ export const doctor: Command = {
     // 放在这里加载而非顶层：技能加载器要回头用 commands.ts 的 frontmatter 解析器，
     // 而 commands.ts 又要构建本命令所在的注册表。顶层 import 会成环，
     // 且会在启动时就出事、而不是在这里。与 /help 用的是同一招。
+    // 步骤 1：动态加载，打破循环依赖。
     const [{ findInstructionFiles }, { loadSkills }] = await Promise.all([
       import('../context.js'),
       import('../skills/loadSkills.js'),
@@ -53,6 +58,7 @@ export const doctor: Command = {
     const cwd = ctx.cwd
     const checks: Check[] = []
 
+    // 步骤 2：运行环境。
     const nodeMajor = Number(process.versions.node.split('.')[0])
     checks.push({
       label: 'Node.js',
@@ -91,6 +97,7 @@ export const doctor: Command = {
     // where you find out.
     // 技能、钩子、MCP 服务器是三处「由文件决定代理能做什么」的地方。
     // 其中任何一处悄悄没加载上，就在这里发现。
+    // 步骤 3：技能、钩子、MCP。
     const skills = loadSkills(cwd)
     checks.push({
       label: 'Skills',
@@ -128,6 +135,7 @@ export const doctor: Command = {
           : `${mcpServers.join(', ')} (configured; startup reports failures)`,
     })
 
+    // 步骤 4：MINI.md 与会话记录。
     const instructionFiles = findInstructionFiles(cwd)
     checks.push({
       label: 'MINI.md',
@@ -145,6 +153,7 @@ export const doctor: Command = {
       detail: sessions.length === 0 ? 'none saved for this project' : `${sessions.length} saved`,
     })
 
+    // 步骤 5：探可选外部程序——两者都不是必需，故一律 ok:true，只在 detail 里说清有没有。
     const binaries: { label: string; binary: string; args: string[] }[] = [
       { label: 'git', binary: 'git', args: ['--version'] },
       { label: 'ripgrep', binary: 'rg', args: ['--version'] },
@@ -166,6 +175,7 @@ export const doctor: Command = {
       checks.push({ label, ok: true, detail })
     }
 
+    // 步骤 6：对齐并拼装报告。
     const width = Math.max(...checks.map(check => check.label.length))  // 取最长标签长度作为对齐宽度，报告各行的冒号才能排成一列
     return {
       type: 'text',

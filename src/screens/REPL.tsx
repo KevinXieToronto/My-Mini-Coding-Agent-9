@@ -58,6 +58,12 @@ export type McpBundle = { tools: Tool[]; instructions: string; failures: string[
 export type REPLProps = { settings: Settings; resume?: SessionSummary; mcp?: McpBundle }
 
 // 本组件：REPL 主屏，持有会话状态、转录列表、授权弹窗与输入框，并负责会话记录与回退。
+// 挂载顺序：1 建可渲染 state（转录、流式文本、忙碌、授权弹窗）
+//          → 2 建会话级 ref（消息列表、中断器、文件历史、会话写入器、花费统计、工具上下文）
+//          → 3 经 useLazyRef 只构建一次技能表、工具表、系统提示词与命令表（顺序有依赖）
+//          → 4 若是恢复会话，回放一次历史记录并接续 uuid 链
+//          → 5 挂载时跑一次 SessionStart 钩子 → 6 绑 Ctrl+C：忙时中断、闲时退出
+//          → 7 渲染顶栏、转录、待办面板、流式文本，末尾按状态三选一显示弹窗/转轮/输入框。
 export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
   const { exit } = useApp()
   const { stdout } = useStdout()
@@ -138,6 +144,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
 
   // Replay a resumed transcript into the UI, once.
   // 恢复的会话记录只回放一次到界面上。
+  // 步骤 4：回放历史会话。
   const [restored, setRestored] = useState(false)
   if (resume && !restored) {
     const entries = readTranscript(resume.path)
@@ -182,6 +189,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
     }
   }, [])
 
+  // 步骤 6：Ctrl+C 双义——忙时只中断当前回合，闲时才退出程序。
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
       if (busy) abortRef.current?.abort('interrupt')
@@ -209,6 +217,11 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
     [],
   )
 
+  // 本函数：处理用户一次提交。
+  // 整体流程：1 若是斜杠命令则分发（local 自行处理后返回，prompt 改写文本继续）
+  //          → 2 把原文记入转录 → 3 跑 UserPromptSubmit 钩子（可拦下这次提问）
+  //          → 4 展开 @路径 提及（只给模型看）→ 5 消息入列并落盘
+  //          → 6 建中断控制器并驱动代理循环 → 7 非正常终态补一行提示，finally 收尾。
   const submit = useCallback(
     async (text: string) => {
       // Slash commands are dispatched through the registry (Ch.13), not
@@ -216,6 +229,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
       // to the normal path; a 'local' command handles itself and returns.
       // 斜杠命令交由注册表分发（第 13 章），不再逐条 if 匹配：
       // 'prompt' 命令改写 `text` 后走正常路径，'local' 命令自行处理并返回。
+      // 步骤 1：识别并分发斜杠命令。
       let effectiveText = text
       const parsed = parseCommandLine(text)
       if (parsed) {
@@ -269,6 +283,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
         effectiveText = await command.getPrompt(parsed.args, commandContext)
       }
 
+      // 步骤 2：把用户敲下的原文记入转录（展开与改写都不回写这里）。
       setEntries(previous => [...previous, { kind: 'user', text }])
 
       // UserPromptSubmit is the one hook that sees the prompt before the model
@@ -276,6 +291,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
       // actually sent, not what was typed.
       // UserPromptSubmit 是唯一能在模型之前看到提问的钩子。
       // 它在命令展开之后运行，因此守的是「真正发出去的内容」，而非用户敲下的字面。
+      // 步骤 3：跑 UserPromptSubmit 钩子——它可以注入上下文，也可以直接拦下这次提问。
       const submitted = await runContextHooks(
         sessionRef.current.hooks,
         'UserPromptSubmit',
@@ -298,6 +314,7 @@ export function REPL({ settings, resume, mcp }: REPLProps): React.ReactElement {
       // @path mentions are expanded for the MODEL only; the transcript keeps
       // showing what the user actually typed.
       // @path 提及只为模型展开；转录里仍显示用户实际输入的文本。
+      // 步骤 4、5：展开 @路径 提及，拼上钩子注入的上下文，入列并追加到会话记录。
       const expanded = expandUserMentions(effectiveText, sessionRef.current.cwd)  // 展开结果只进消息列表，不回写转录，故界面上仍是用户敲下的原文
       const userMessage: Message = {
         role: 'user',
@@ -312,6 +329,7 @@ ${submitted.additionalContext}
       messagesRef.current.push(userMessage)
       writerRef.current.append(userMessage)
 
+      // 步骤 6：建本回合专属的中断控制器（Ctrl+C 经 abortRef 打到它），然后驱动代理循环。
       const abortController = new AbortController()
       abortRef.current = abortController
       setBusy(true)
@@ -329,6 +347,7 @@ ${submitted.additionalContext}
           setEntries,
           setStreamingText,
         })
+        // 步骤 7：正常结束什么都不说；被中断、超圈数、模型报错才补一行提示。
         if (terminal.reason !== 'completed') {
           setEntries(previous => [
             ...previous,

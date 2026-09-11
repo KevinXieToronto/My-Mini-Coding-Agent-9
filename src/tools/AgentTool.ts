@@ -108,19 +108,28 @@ export function createAgentTool(deps: AgentToolDeps) {
       return data ? `sub-agent finished in ${data.turns} turn(s)` : 'done'
     },
 
+    // 本函数：派生并跑完一个子代理，只把它的最终发言带回父级。
+    // 整体流程：1 定型别与 agentId → 2 派生子上下文（独立中断与读取状态，共享权限与文件历史）
+    //          → 3 explore 型额外钉进 plan 模式，强制只读 → 4 剔掉子代理不得拥有的工具
+    //          → 5 跑嵌套循环（自带 20 圈上限）→ 6 只回传最终文本，其余全部丢弃。
     async execute(input, ctx) {
+      // 步骤 1：定型别与 id。
       const type = input.subagent_type ?? 'explore'
       const agentId = `agent_${randomUUID().slice(0, 8)}`
 
+      // 步骤 2：派生子上下文。
       const childCtx = createSubagentContext(ctx, agentId)
       // A read-only sub-agent is confined by plan mode, whatever the parent is in.
       // 只读子代理一律被 plan 模式约束，无论父级处于什么模式。
+      // 步骤 3：explore 型钉进 plan 模式。
       if (type === 'explore') {
         childCtx.permissions = { ...childCtx.permissions, mode: 'plan' }  // 只改子上下文的模式副本，父级模式不受影响；explore 型子代理因此被钉死在只读
       }
 
+      // 步骤 4：裁剪工具池。
       const tools = deps.getTools().filter(tool => !DISALLOWED_FOR_SUBAGENTS.has(tool.name))  // 剔除 Agent 自身以断掉无限递归，同时剔除 ExitPlanMode（子代理没有可批准计划的用户）
 
+      // 步骤 5：跑嵌套循环。它就是同一个 query()，只是换了上下文与工具清单。
       const { text, turns } = await deps.runNestedQuery({
         messages: [{ role: 'user', content: input.prompt }],
         tools,
@@ -132,6 +141,7 @@ export function createAgentTool(deps: AgentToolDeps) {
       // Only the final message crosses back. Everything else is discarded —
       // that discarding IS the feature.
       // 只有最终消息回传，其余全部丢弃——「丢弃」本身就是这个特性的价值所在。
+      // 步骤 6：只回传最终文本。
       return {
         result: text.trim() || '(the sub-agent produced no output)',
         data: { turns, agentId },

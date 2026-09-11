@@ -77,11 +77,16 @@ export class FileHistory {
    * 逆序应用，确保同一文件最终落盘的是最早的那份快照。
    */
   // 本函数：回退到指定消息下标，恢复文件内容并返回已恢复的路径。
+  // 整体流程：1 挑出回退点之后的快照并按下标倒序排
+  //          → 2 逐份写回磁盘（原本不存在的文件写成空串），失败的跳过
+  //          → 3 就地丢弃已消费的快照、保留回退点之前的 → 4 返回实际恢复的路径集合。
   rewindTo(messageIndex: number): string[] {
+    // 步骤 1：挑出并倒序。
     const toRestore = this.checkpoints
       .filter(c => c.messageIndex >= messageIndex)
       .sort((a, b) => b.messageIndex - a.messageIndex)  // 按下标倒序恢复，于是同一文件最后落盘的是最早那份快照，即回退目标时刻的内容
 
+    // 步骤 2：逐份写回。
     const restored = new Set<string>()
     for (const checkpoint of toRestore) {
       try {
@@ -100,6 +105,7 @@ export class FileHistory {
       }
     }
 
+    // 步骤 3、4：丢弃已消费的快照，返回恢复结果。
     this.checkpoints.splice(
       0,
       this.checkpoints.length,

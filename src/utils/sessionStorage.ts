@@ -150,6 +150,8 @@ export function readTranscript(path: string): TranscriptEntry[] {
  * 本项目的会话列表，最新在前。
  */
 // 本函数：列举当前项目的所有会话摘要。
+// 整体流程：1 目录不存在直接返回空 → 2 只取 .jsonl 文件 → 3 逐份读出条目，
+//          取首条 user 消息作预览、mtime 作时间 → 4 滤掉空壳记录 → 5 按时间倒序排。
 export function listSessions(cwd: string): SessionSummary[] {
   const dir = projectDir(cwd)
   if (!existsSync(dir)) return []

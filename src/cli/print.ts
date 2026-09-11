@@ -31,6 +31,9 @@ import type { McpBundle } from '../screens/REPL.js'
  * 这里权限默认拒绝：没有人可问；脚本里自动批准，正是代理删掉构建服务器的方式。
  */
 // 本函数：以非交互方式跑一个回合，把流式文本直接写到 stdout。
+// 整体流程：1 MCP 失败信息写 stderr → 2 取提问（-p 参数优先，否则读 stdin）
+//          → 3 跑 SessionStart 钩子 → 4 跑 UserPromptSubmit 钩子（可拦下并以 1 退出）
+//          → 5 组装消息与工具上下文（canUseTool 恒为拒绝）→ 6 迭代循环，只把文本增量写 stdout。
 export async function runPrintMode(
   settings: Settings,
   permissions: PermissionContext,
@@ -41,8 +44,10 @@ export async function runPrintMode(
   // answer, and a script piping it should not have to filter our diagnostics.
   // 连不上的服务器写到 stderr 而非 stdout：stdout 是答案本身，
   // 下游脚本不该被迫从中过滤我们的诊断信息。
+  // 步骤 1：失败信息走 stderr。
   for (const failure of mcp?.failures ?? []) console.error(failure)
 
+  // 步骤 2：取提问。
   const text = prompt ?? (await readAllStdin())  // -p 的参数优先；没给才去读 stdin，于是「参数」与「管道」两条入口共用同一段后续逻辑
   if (!text.trim()) {
     stdout.write('No prompt given. Use -p "your prompt", or pipe text on stdin.\n')
@@ -58,6 +63,7 @@ export async function runPrintMode(
   // fires interactively is no guard at all.
   // 先 SessionStart，再 UserPromptSubmit——与 REPL 相同的两个注入点。
   // 脚本模式同样吃项目的钩子：只在交互时生效的守卫，等于没有守卫。
+  // 步骤 3：SessionStart 钩子注入的上下文变成第一条 user 消息。
   const messages: Message[] = []
   const started = await runContextHooks(
     hooks,
@@ -69,6 +75,7 @@ export async function runPrintMode(
     messages.push({ role: 'user', content: started.additionalContext })
   }
 
+  // 步骤 4：UserPromptSubmit 钩子；被拦下就以退出码 1 结束，脚本据此知道没跑成。
   const submitted = await runContextHooks(
     hooks,
     'UserPromptSubmit',
@@ -92,6 +99,7 @@ ${submitted.additionalContext}
       : text.trim(),
   })
 
+  // 步骤 5：组装工具上下文并起循环。每次运行都是全新的一次性会话，故各状态都新建。
   const abortController = new AbortController()
 
   const iterator = query({
@@ -115,6 +123,7 @@ ${submitted.additionalContext}
     canUseTool: async () => false,  // 非交互模式下无人可问，一律拒绝；脚本里自动批准正是代理闯祸的方式
   })
 
+  // 步骤 6：迭代到底。终态非 completed 时在 stdout 末尾标一行并置退出码 1。
   while (true) {
     const step = await iterator.next()
     if (step.done) {

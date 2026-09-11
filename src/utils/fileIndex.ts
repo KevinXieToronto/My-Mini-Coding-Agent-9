@@ -83,12 +83,18 @@ export function toPosix(path: string): string {
 }
 
 // 本函数：广度遍历目录树，剪掉忽略目录、限量返回文件（可选含目录）的路径与 mtime。
+// 整体流程：1 读 .gitignore 建忽略匹配器，以 cwd 为队列初值 → 2 循环从队首取目录并 readdir
+//          → 3 逐项过滤：硬名单、stat 失败、被 .gitignore 忽略的一律跳过
+//          → 4 目录入队等下一轮（剪枝即发生在这里），文件直接记入结果
+//          → 5 结果数达上限即停止，防止病态目录树卡死 agent。
 export function walk(options: WalkOptions): WalkedFile[] {
+  // 步骤 1：忽略匹配器与遍历队列。
   const { cwd, maxFiles = 20_000, includeDirs = false } = options
   const ig = loadIgnore(cwd)
   const results: WalkedFile[] = []
   const queue: string[] = [cwd]
 
+  // 步骤 2、5：队列非空且未达上限就继续——上限同时是循环条件与提前收工的闸口。
   while (queue.length > 0 && results.length < maxFiles) {
     const dir = queue.shift()!  // 从队首取目录即广度优先：浅层文件先被收满，深层的大目录不会抢占名额上限
     let entries: string[]
@@ -99,6 +105,7 @@ export function walk(options: WalkOptions): WalkedFile[] {
       // 目录不可读：跳过，不要让搜索崩掉。
     }
 
+    // 步骤 3：逐项过滤。
     for (const name of entries) {
       if (ALWAYS_SKIP.has(name)) continue
 
@@ -117,6 +124,7 @@ export function walk(options: WalkOptions): WalkedFile[] {
       // ignore 的 API 需要结尾斜杠才能识别目录规则。
       if (ig.ignores(stat.isDirectory() ? `${rel}/` : rel)) continue  // 被忽略的目录直接不入队——剪枝而非逐个过滤其中的文件，这是遍历够快的关键
 
+      // 步骤 4：目录入队、文件入结果。
       if (stat.isDirectory()) {
         queue.push(full)  // 目录只入队等下一轮展开，不在此处递归——递归会让深目录树把调用栈吃满
         if (includeDirs) {

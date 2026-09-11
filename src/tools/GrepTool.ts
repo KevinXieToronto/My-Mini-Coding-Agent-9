@@ -71,7 +71,11 @@ export const GrepTool = buildTool({
  * ripgrep 不可用时返回 undefined，让调用方走兜底路径。
  */
 // 本函数：按输出模式拼装参数调用外部 rg 进程；rg 缺失或异常时返回 undefined 以便走兜底。
+// 整体流程：1 按输出模式拼 rg 参数（-l / -c / -n -C）→ 2 追加 -i、--glob、模式与根路径
+//          → 3 同步执行 rg 并整理输出 → 4 退出码 1 视为「零匹配」这一有效答案，
+//          其余异常（含 rg 未安装）返回 undefined，由调用方走纯 JS 兜底。
 function tryRipgrep(input: GrepInput, root: string): { result: string; data: unknown } | undefined {
+  // 步骤 1、2：拼参数。
   const mode = input.output_mode ?? 'files_with_matches'
   const args: string[] = ['--color=never']
 
@@ -85,6 +89,7 @@ function tryRipgrep(input: GrepInput, root: string): { result: string; data: unk
   if (input.glob) args.push('--glob', input.glob)
   args.push('-e', input.pattern, root)
 
+  // 步骤 3：执行并整理输出。
   try {
     const stdout = execFileSync('rg', args, {
       encoding: 'utf8',
@@ -93,6 +98,7 @@ function tryRipgrep(input: GrepInput, root: string): { result: string; data: unk
     })
     return formatLines(stdout.split('\n').filter(Boolean), root, mode)
   } catch (error) {
+    // 步骤 4：区分「零匹配」与「rg 不可用」。
     const code = (error as { code?: string; status?: number }).code
     // status 1 means "no matches" — a real answer, not a missing binary.
     // 退出码 1 表示「没有匹配」——这是有效答案，不是缺少二进制。
@@ -105,8 +111,13 @@ function tryRipgrep(input: GrepInput, root: string): { result: string; data: unk
 }
 
 // 本函数：纯 JS 兜底扫描——遵守 .gitignore、跳过大文件与二进制，按输出模式组织并限量结果。
+// 整体流程：1 编译正则（非法即报错）→ 2 备好 glob 过滤器与输出选项
+//          → 3 遍历目录树，逐文件过滤：不匹配 glob、过大、二进制的一律跳过
+//          → 4 逐行找命中，无命中即跳过 → 5 按输出模式记一行 / 一条计数 / 带上下文的多行
+//          → 6 攒够上限即整体停止 → 7 拼装结果并附截断提示。
 function scanInJs(input: GrepInput, root: string): { result: string; data: unknown } {
   const mode = input.output_mode ?? 'files_with_matches'
+  // 步骤 1：编译正则。
   let regex: RegExp
   try {
     regex = new RegExp(input.pattern, input['-i'] ? 'i' : '')  // 模型给的正则可能非法，在这里一次性编译并转成清晰报错，而不是逐文件失败
@@ -114,6 +125,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
     throw new Error(`Invalid regular expression: ${String(error)}`)
   }
 
+  // 步骤 2：glob 过滤器与输出选项。没给 glob 就用恒真函数，省掉后面的分支判断。
   const isMatch = input.glob ? picomatch(input.glob, { dot: true }) : () => true
   const context = input['-C'] ?? 0
   const showLineNumbers = input['-n'] !== false
@@ -122,6 +134,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
   let fileCount = 0
   let matchCount = 0
 
+  // 步骤 3：遍历并逐文件过滤。
   for (const file of walk({ cwd: root })) {
     if (!isMatch(file.relative)) continue
 
@@ -137,6 +150,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
       continue
     }
 
+    // 步骤 4：逐行找命中。
     const fileLines = content.split(/\r?\n/)
     const hits: number[] = []  // 先收齐命中行号再统一输出：上下文模式需要知道相邻命中的位置才能合并重叠窗口
     for (let i = 0; i < fileLines.length; i++) {
@@ -147,6 +161,7 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
     fileCount += 1
     matchCount += hits.length
 
+    // 步骤 5：按输出模式落行。
     if (mode === 'files_with_matches') {
       lines.push(file.relative)
     } else if (mode === 'count') {
@@ -162,11 +177,13 @@ function scanInJs(input: GrepInput, root: string): { result: string; data: unkno
         }
       }
     }
+    // 步骤 6：提前收工。
     if (lines.length >= MAX_MATCHES) break  // 攒够上限就整体停止遍历，而不是走完全树再截断——省下的是剩余文件的读盘开销
   }
 
   if (lines.length === 0) return { result: 'No matches found.', data: { files: 0, matches: 0 } }
 
+  // 步骤 7：拼装结果。
   const shown = lines.slice(0, MAX_MATCHES)
   const footer = lines.length > shown.length ? `\n... truncated at ${MAX_MATCHES} lines` : ''
   return {

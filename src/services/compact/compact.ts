@@ -113,6 +113,8 @@ anyone, and do not describe the conversation as a conversation.`
  * 也不会与 agent 的指令混淆。
  */
 // 本函数：执行一次压缩——先 snip，收效不足再调模型生成摘要并替换旧消息。
+// 整体流程：1 裁剪陈旧大结果 → 2 够省就收工 → 3 划出 head/tail → 4 把 head 裁进摘要预算
+//          → 5 调模型生成摘要（失败则降级为仅 snip）→ 6 用「摘要 + tail」重组会话。
 export async function compactConversation(
   messages: Message[],
   settings: Settings,
@@ -122,12 +124,15 @@ export async function compactConversation(
 
   // Cheap pass first.
   // 先走便宜的那一遍。
+  // 步骤 1：不调模型，先原地裁剪陈旧的超大工具结果。
   const snipped = snipOldToolResults(messages)
   const afterSnip = totalTokens(snipped)
+  // 步骤 2：省下三成以上就到此为止，省掉一次模型调用。
   if (afterSnip < tokensBefore * 0.7) {  // 光靠裁剪就省下三成以上就到此为止，不必再花一次模型调用去做摘要
     return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'snip' }
   }
 
+  // 步骤 3：以 KEEP_TAIL 为界划出 head（待总结）与 tail（原样保留）。
   const cutoff = Math.max(0, snipped.length - KEEP_TAIL)
   const head = snipped.slice(0, cutoff)
   const tail = snipped.slice(cutoff)
@@ -140,11 +145,13 @@ export async function compactConversation(
   // so we trim the head to a budget before sending it.
   // 摘要请求本身也必须装得下窗口。为了从溢出中恢复反而再次溢出，正是本文件要防的事，
   // 因此发送前先把 head 裁到预算之内。
+  // 步骤 4：把 head 裁进摘要请求自身的 token 预算。
   const sendable = headWithinBudget(head, summaryBudget(settings.model))  // 摘要请求自身也要装进窗口，先把待总结的历史裁到预算内再发出去
   if (sendable.length === 0) {
     return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'snip' }
   }
 
+  // 步骤 5：调模型生成摘要；这一步失败或产出为空都不抛错，降级为「仅 snip」。
   let summary = ''
   try {
     for await (const event of streamAssistantTurn({
@@ -168,6 +175,7 @@ export async function compactConversation(
     return { messages: snipped, tokensBefore, tokensAfter: afterSnip, method: 'snip' }
   }
 
+  // 步骤 6：用「一条摘要 user 消息 + 配对完整的 tail」重组整段会话。
   const compacted: Message[] = [
     {
       role: 'user',

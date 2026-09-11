@@ -78,9 +78,14 @@ const BASH_NOT_FOUND =
  * stderr 也并入结果而非丢弃：命令失败时，stderr 才是模型要的答案。
  */
 // 本函数：在子进程中执行一条命令，带超时、输出截断与中断支持，返回结构化结果。
+// 整体流程：1 解析出可执行文件（bash 需定位 Git Bash）→ 2 找不到就在 spawn 前失败并给出可操作提示
+//          → 3 按 shell 种类拼出可执行文件与参数 → 4 起子进程，stdin 一律关闭
+//          → 5 收集输出并按总量上限截断 → 6 挂超时器与中断监听，两者都直接杀进程
+//          → 7 收尾：清定时器、摘监听器、兑现结构化结果。
 export function runShell(options: RunShellOptions): Promise<ShellResult> {
   const { command, cwd, timeoutMs, signal, shell } = options
 
+  // 步骤 1：解析可执行文件。
   const bashPath = shell === 'bash' ? resolveBash() : null
 
   // Fail before spawning, with an actionable message. Spawning WSL instead
@@ -88,6 +93,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
   // has no way to tell that the shell itself was wrong.
   // 在 spawn 之前就失败，并给出可操作的提示。误起 WSL 会「启动成功」再以 1 退出，
   // 看起来像命令本身失败，模型根本无从判断是 shell 选错了。
+  // 步骤 2：Git Bash 缺失时提前失败。
   if (shell === 'bash' && bashPath === null) {
     return Promise.resolve({
       stdout: '',
@@ -98,12 +104,14 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
     })
   }
 
+  // 步骤 3：拼出可执行文件与参数。
   const [file, args] =
     shell === 'bash'
       ? [bashPath as string, ['-c', command]]
       : ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command]]  // -NoProfile 跳过用户配置以免污染环境，-NonInteractive 让任何提示直接报错而不是把我们挂住
 
   return new Promise<ShellResult>(resolve => {
+    // 步骤 4：起子进程。
     const child = spawn(file, args, {
       cwd,
       // Never inherit stdin: an interactive prompt would hang us forever.
@@ -117,6 +125,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
     let truncated = false
     let timedOut = false
 
+    // 步骤 5：收集输出并限量。
     // 本函数：把一段输出追加到 stdout/stderr，总量超上限则只记截断标记。
     const append = (target: 'out' | 'err', chunk: string): void => {
       if (stdout.length + stderr.length > MAX_OUTPUT_CHARS) {  // 按两股输出的总量设限，只置标记不再累积，内存与上下文都不会被长日志撑爆
@@ -132,6 +141,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
     child.stdout.on('data', chunk => append('out', String(chunk)))
     child.stderr.on('data', chunk => append('err', String(chunk)))
 
+    // 步骤 6：超时与中断，两条路都是杀进程。
     const timer = setTimeout(() => {  // 先置标记再杀进程：随后的 close 事件才知道这次退出是超时所致，而非命令自己失败
       timedOut = true
       child.kill('SIGKILL')
@@ -143,6 +153,7 @@ export function runShell(options: RunShellOptions): Promise<ShellResult> {
     }
     signal.addEventListener('abort', onAbort, { once: true })
 
+    // 步骤 7：收尾。
     // 本函数：收尾——清理定时器与监听器，并兑现结果。
     const finish = (exitCode: number | null): void => {
       clearTimeout(timer)

@@ -24,10 +24,15 @@ export type CliOptions = {
  * 参见 Claude Code 的 src/main.tsx（那边约 800 KB，这里只有几行）。
  */
 // 本函数：切换工作目录、加载 .env 与分层设置；--debug 时打印诊断信息，否则启动 REPL。
+// 整体流程：1 定位 cwd 与 .env → 2 分层加载设置 → 3 命令行逐项覆盖 → 4 处理 --list-sessions
+//          → 5 解析要恢复的会话 → 6 构建权限上下文 → 7 --debug 则打印后退出
+//          → 8 连接 MCP → 9 按有无 TTY 选 print 模式或 Ink 界面 → 10 退出前断开 MCP。
 export async function runCli(opts: CliOptions): Promise<void> {
+  // 步骤 1：先切到目标工作目录，再加载其中的 .env——后续所有相对路径都以此为基准。
   process.chdir(opts.cwd)
   loadEnvFile(opts.cwd)
 
+  // 步骤 2、3：分层加载设置（默认 < 用户 < 项目），随后由命令行参数逐项覆盖。
   const settings = loadSettings(opts.cwd)
   if (opts.model) settings.model = opts.model  // 命令行是最高一层：分层加载完再逐项覆盖，就实现了「默认 < 用户 < 项目 < 参数」
 
@@ -49,6 +54,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
     settings.additionalDirectories = [...(settings.additionalDirectories ?? []), ...opts.addDir]
   }
 
+  // 步骤 4：--list-sessions 是纯查询，列完即返回，不启动任何后续组件。
   if (opts.listSessions) {
     const sessions = listSessions(process.cwd())
     if (sessions.length === 0) console.log('No saved sessions for this directory.')
@@ -59,10 +65,13 @@ export async function runCli(opts: CliOptions): Promise<void> {
     return
   }
 
+  // 步骤 5：解析 --continue / --resume，决定要不要接续某次历史会话。
   const resume = resolveResume(opts)
 
+  // 步骤 6：合成运行期权限上下文（模式、规则、附加目录）——它先于工具表构建，因为工具表与模式有关。
   const permissionContext = buildPermissionContext(settings, process.cwd())
 
+  // 步骤 7：--debug 只打印解析后的配置就退出，不连服务器、不起界面。
   if (opts.debug) {
     console.log(`${PRODUCT_NAME} v${VERSION}`)
     console.log(`cwd:      ${process.cwd()}`)
@@ -93,6 +102,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
   // Connect MCP servers before the UI mounts, so their tools are in the very
   // first request rather than appearing a turn later.
   // 在 UI 挂载前连接 MCP 服务器，让其工具出现在第一次请求里，而不是晚一个回合才冒出来。
+  // 步骤 8：连接 MCP 服务器，把工具、说明与失败信息打包成 mcp 交给下游两条路径共用。
   const { connectAll, disconnectAll, renderMcpInstructions } = await import(
     './services/mcp/client.js'
   )
@@ -111,6 +121,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
   // argument as for hooks in Ch.16.
   // print 模式同样吃这些服务器：只在有人盯着时才存在的能力，脚本无法依赖——
   // 与第 16 章为钩子所持的理由相同。
+  // 步骤 9a：非交互路径——跑完一个回合就返回，finally 里保证断开 MCP。
   if (opts.print !== undefined || !process.stdin.isTTY) {  // 显式 -p，或压根没有 TTY（管道、CI），都走非交互路径——Ink 无终端启动不了
     const { runPrintMode } = await import('./cli/print.js')
     try {
@@ -121,6 +132,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
     return
   }
 
+  // 步骤 9b：交互路径——三个重依赖并行动态加载，挂载 Ink 界面。
   const [{ render }, { createElement }, { REPL }] = await Promise.all([
     import('ink'),
     import('react'),
@@ -131,6 +143,7 @@ export async function runCli(opts: CliOptions): Promise<void> {
   // A stdio server is a child process. Skip this and every session leaves an
   // orphan behind.
   // stdio 服务器是子进程。跳过这一步，每次会话都会留下孤儿进程。
+  // 步骤 10：界面退出后收尾，断开所有 MCP 连接。
   await disconnectAll(connections)
 }
 

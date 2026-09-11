@@ -37,6 +37,10 @@ export type ParsedCommand = {
 const OPERATORS = ['&&', '||', ';', '|', '\n']
 
 // 本函数：扫描命令字符串，按引号/转义/嵌套深度安全地切出子命令，并标记不支持的语法。
+// 逐字符扫描，每个字符依次过这几道判断：1 反斜杠转义（单引号内除外）→ 2 引号内原样收下
+//          → 3 引号起始，记住是哪一种 → 4 子 shell / 命令替换：打不支持标记并加深度
+//          → 5 深度为 0 时才把 && || ; | 当作分隔符切段
+//          → 6 扫完补推最后一段，并滤掉空串。
 export function parseCommand(command: string): ParsedCommand {
   const parts: string[] = []
   let current = ''

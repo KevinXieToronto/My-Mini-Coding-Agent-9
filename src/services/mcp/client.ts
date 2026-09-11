@@ -42,13 +42,18 @@ export type McpConnection = {
  * 否则你会因为一个当下根本用不到的服务配置写错一个字，就被锁在自己的代理之外。
  */
 // 本函数：按配置建立 stdio / HTTP 传输并连接一台 MCP 服务器，列出其工具；失败则返回带 error 的记录。
+// 整体流程：1 建客户端 → 2 按配置选传输（有 url 走 HTTP，否则起 stdio 子进程）
+//          → 3 带超时地握手 → 4 带超时地列工具并逐个包装成本地 Tool
+//          → 5 任一步出错都收进 error 字段返回，绝不抛出。
 export async function connectServer(
   name: string,
   config: McpServerConfig,
 ): Promise<McpConnection> {
+  // 步骤 1：建客户端（此时还未连接，故失败记录里也能带上它）。
   const client = new Client({ name: PRODUCT_NAME, version: VERSION }, { capabilities: {} })
 
   try {
+    // 步骤 2：按配置选传输方式。
     const transport =
       'url' in config  // 配置里有 url 就走 HTTP 传输，否则按 stdio 起子进程——两种传输在此分流
         ? new StreamableHTTPClientTransport(new URL(config.url), {
@@ -71,13 +76,16 @@ export async function connectServer(
             stderr: 'ignore',
           })
 
+    // 步骤 3：握手。超时包装是必须的——接受连接后就沉默的服务器会让启动永久挂住。
     await withTimeout(client.connect(transport), CONNECT_TIMEOUT_MS, `connecting to ${name}`)
 
+    // 步骤 4：列出远端工具并逐个包装成本地 Tool。
     const listed = await withTimeout(client.listTools(), CONNECT_TIMEOUT_MS, `listing ${name} tools`)
     const tools = listed.tools.map(remote => toMiniTool(name, client, remote))
 
     return { name, client, tools, instructions: client.getInstructions() }
   } catch (error) {
+    // 步骤 5：失败只记录。一台连不上的服务器不能拖住整个 CLI 启动。
     return {
       name,
       client,
@@ -183,7 +191,11 @@ function toMiniTool(
 
     renderCall: input => `${serverName}:${remote.name}(${compact(input)})`,
 
+    // 本函数：调用远端工具并把结果规整为文本。
+    // 整体流程：1 可中断地发起调用 → 2 把返回的内容块拼成文本（未知形状用占位符）
+    //          → 3 按上限截断 → 4 远端报错则转成异常，交由循环变成 tool_result。
     async execute(input, ctx) {
+      // 步骤 1：发起调用，同时挂上中断竞速，慢服务器也不影响 Esc 的灵敏度。
       const response = await withAbort(
         client.callTool({ name: remote.name, arguments: input as Record<string, unknown> }),
         ctx.abortController.signal,
@@ -192,6 +204,7 @@ function toMiniTool(
       // Defensive: MCP can return image and resource blocks, not just text. We
       // render a placeholder rather than crashing on a shape we did not handle.
       // 防御性处理：MCP 可返回图片与资源块，不只是文本。遇到未处理的形状就渲染占位符，而不是崩溃。
+      // 步骤 2：内容块拼成文本。
       const text = (Array.isArray(response.content) ? response.content : [])  // 先确认是数组再遍历：服务器返回的形状不受我们控制，非数组时按空内容处理
         .map(block =>
           block && typeof block === 'object' && 'text' in block
@@ -203,9 +216,11 @@ function toMiniTool(
       // Truncation is ours to do: a remote server has no reason to respect our
       // context window.
       // 截断得由我们来做：远程服务器没有理由尊重我们的上下文窗口。
+      // 步骤 3：截断。
       const truncated =
         text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n... [truncated]` : text
 
+      // 步骤 4：远端业务错误转异常。
       if (response.isError) throw new Error(truncated || 'the MCP tool reported an error')  // 远端的业务错误在此转成异常，由代理循环转成 tool_result 交还模型自行纠正
       return { result: truncated || '(no content)', data: { server: serverName } }
     },

@@ -35,7 +35,10 @@ const MAX_IMPORT_DEPTH = 3
  * 并会在工具触及某目录时按需加载该目录的文件。
  */
 // 本函数：自用户目录与文件系统根目录一路向下，收集所有 MINI.md 指令文件路径。
+// 整体流程：1 先收用户级文件 → 2 自 cwd 逐级向上，拼出「根目录 → cwd」的目录链
+//          → 3 沿链自上而下逐目录收集，故通用的在前、具体的在后（提示词中后者胜出）。
 export function findInstructionFiles(cwd: string): string[] {
+  // 步骤 1：用户级文件最通用，排在最前。
   const found: string[] = []
 
   // User-level: %USERPROFILE%\.mini-cc\MINI.md
@@ -45,6 +48,7 @@ export function findInstructionFiles(cwd: string): string[] {
 
   // Walk from the filesystem root down to cwd, collecting as we go.
   // 从文件系统根目录向下走到 cwd，沿途收集。
+  // 步骤 2：拼出目录链。
   const { root } = parse(cwd)
   const chain: string[] = []
   let current = cwd
@@ -56,6 +60,7 @@ export function findInstructionFiles(cwd: string): string[] {
     current = parent
   }
 
+  // 步骤 3：沿链收集，每级各看 MINI.md 与 .mini-cc/MINI.md 两处。
   for (const dir of chain) {
     for (const candidate of [
       join(dir, PROJECT_MEMORY_FILE),
@@ -113,7 +118,10 @@ function expandImports(text: string, baseDir: string, depth: number, seen: Set<s
  * 精简的 git 概览。低成本的方位感：模型无需花一次工具调用即可知道分支与哪些文件被改动。
  */
 // 本函数：生成精简的 git 概览（分支、改动文件、近期提交），非仓库或无 git 时返回 undefined。
+// 整体流程：1 备一个「失败即 undefined」的 git 执行器 → 2 先问分支，拿不到就说明不是仓库，直接放弃
+//          → 3 取 status --short，最多列 20 行 → 4 取最近 5 条提交 → 5 拼成多行文本。
 export function getGitStatus(cwd: string): string | undefined {
+  // 步骤 1：统一的 git 执行器——关掉 stdin、忽略 stderr、带超时，任何失败都化为 undefined。
   const git = (args: string[]): string | undefined => {
     try {
       return execFileSync('git', args, {
@@ -127,12 +135,14 @@ export function getGitStatus(cwd: string): string | undefined {
     }
   }
 
+  // 步骤 2：分支既是要报的信息，也是「这里是不是 git 仓库」的探针。
   const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'])
   if (!branch) return undefined // not a repo, or git is not installed
   // 不是仓库，或未安装 git。
 
   const parts = [`Branch: ${branch}`]
 
+  // 步骤 3：改动文件清单，超过 20 行只列前 20 行并注明还有多少。
   const status = git(['status', '--short'])
   if (status) {
     const lines = status.split('\n')
@@ -144,9 +154,11 @@ export function getGitStatus(cwd: string): string | undefined {
     parts.push('Working tree clean')
   }
 
+  // 步骤 4：最近 5 条提交，给模型一点「这个仓库最近在干什么」的方位感。
   const log = git(['log', '--oneline', '-5'])
   if (log) parts.push(`Recent commits:\n${log}`)
 
+  // 步骤 5：拼成一段多行文本。
   return parts.join('\n')
 }
 

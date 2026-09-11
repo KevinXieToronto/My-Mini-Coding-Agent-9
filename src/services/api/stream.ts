@@ -36,6 +36,9 @@ export type StreamParams = {
  * JSON 参数则零散分布在后续众多分片中。我们累积成密集数组，最后一次性产出完整 ToolCall。
  */
 // 本函数：流式请求一次助手回合，过程中产出文本增量，结束时给出完整文本、工具调用与用量。
+// 整体流程：1 取客户端并发起流式请求 → 2 逐分片处理：记 usage、累积并 yield 文本增量、
+//          按 index 累积工具调用分片 → 3 流结束后把分片合成完整 ToolCall
+//          → 4 以一条 'done' 事件交出完整文本、工具调用与用量。
 export async function* streamAssistantTurn(
   params: StreamParams,
 ): AsyncGenerator<StreamEvent, void> {
@@ -44,6 +47,7 @@ export async function* streamAssistantTurn(
 
   yield { type: 'request_start' }
 
+  // 步骤 1：发起流式请求。
   const stream = await client.chat.completions.create(
     {
       model: settings.model,
@@ -59,6 +63,7 @@ export async function* streamAssistantTurn(
   const partials: { id: string; name: string; arguments: string }[] = []
   let usage: Usage | undefined
 
+  // 步骤 2：逐分片消费。
   for await (const chunk of stream) {
     if (chunk.usage) {
       usage = {
@@ -83,6 +88,7 @@ export async function* streamAssistantTurn(
     }
   }
 
+  // 步骤 3：把累积的分片槽位合成完整的 ToolCall。
   const toolCalls: ToolCall[] = partials
     .filter(slot => slot && slot.name)  // partials 按下标赋值可能留下空洞，故先滤掉空槽与没拿到名字的残片
     .map((slot, index) => ({
@@ -91,5 +97,6 @@ export async function* streamAssistantTurn(
       arguments: slot.arguments || '{}',
     }))
 
+  // 步骤 4：交出终态。调用方只从这一条事件里取完整结果。
   yield { type: 'done', text, toolCalls, usage }
 }
