@@ -25,6 +25,12 @@ npm start                        # run the bundle
 
 There is no lint or test setup. `tsc --noEmit` is the gate — run it after every change.
 
+**How to verify a change: [`docs/TESTING.md`](docs/TESTING.md).** It is the authority — four gates
+(typecheck → smoke scripts → prompt tests → build), the verified expected output of every smoke
+script, 22 prompt tests each tagged `[STUB]` (no API credits) or `[LIVE]`, a coverage matrix from
+every `src/` file to the test that covers it, and the gaps that matrix leaves open. Consult it
+before deciding a change is done; update it when you add a subsystem or a smoke script.
+
 Instead of unit tests there are **smoke scripts** in `tools-dev/`, each exercising one subsystem
 with no model in the loop. Run one with `npx tsx tools-dev/<name>.ts`:
 
@@ -38,7 +44,11 @@ smoke-hooks.ts      lifecycle hooks     smoke-mcp.ts          MCP client (spawns
 smoke-ui.tsx        Ink components off-screen        smoke-todo.tsx   the todo panel
 ```
 
-`tools-dev/testContext.ts` builds the `ToolContext` these scripts pass in.
+`tools-dev/testContext.ts` builds the `ToolContext` these scripts pass in. The scripts **print
+rather than assert**, so a regression reads as changed output — capture a baseline before editing
+and diff it after (`docs/TESTING.md` §Golden baselines). Nothing here covers `src/query.ts` or the
+interactive Ink components (`PromptInput`, `Spinner`, `PermissionModal`); changes there have to be
+driven by hand.
 
 Developing without API credits: `node tools-dev/stub-server.mjs` starts an OpenAI-compatible stub on
 port 8787, then `set OPENAI_BASE_URL=http://127.0.0.1:8787/v1`. It echoes the last user message; a
